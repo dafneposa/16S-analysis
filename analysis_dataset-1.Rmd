@@ -1,0 +1,1748 @@
+---
+title: "Nudibranchs dataset-1"
+subtitle: "Main Analysis"
+author: "Samuel Piquer-Esteban and Dafne Porcel Sanchis"
+date: "Last modification `r format(Sys.time(), '%d %b %Y')`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+---
+
+<div style="text-align: justify">
+
+\newpage
+
+# Load Libraries
+```{r}
+library(ggplot2)
+library(phyloseq)
+library(microbiome)
+library(psadd)
+library(plotly)
+library(RColorBrewer)
+library(ComplexHeatmap)
+```
+
+# Load Data
+```{r}
+load("./data/pseq_Nudibranchs.RData")
+```
+
+# Doriopsillibacter's full relative abundances(percentages)
+```{r}
+pseq_prop=microbiome::transform(pseq,"compositional")
+dori_asv=subset(row.names(tax_table(pseq_prop)),tax_table(pseq_prop)[,"genus"]=="Doriopsillibacter")
+pseq_prop_dori=subset_taxa(pseq_prop, ASV %in% dori_asv)
+dori_perc=colSums(otu_table(pseq_prop_dori))*100
+#Construct data.frame
+##Check order(all trues)
+#names(dori_perc)==rownames(sample_data(pseq_prop_dori))
+df_dori=data.frame(fastq_name=names(dori_perc),
+                   replica_name=data.frame(sample_data(pseq_prop_dori))[,"Replica"],
+                   sample_name=data.frame(sample_data(pseq_prop_dori))[,"SampleName"],
+                   individual=data.frame(sample_data(pseq_prop_dori))[,"Individual"],
+                   sample_type=data.frame(sample_data(pseq_prop_dori))[,"SampleType"],
+                   environment=data.frame(sample_data(pseq_prop_dori))[,"Environment"],
+                   date=data.frame(sample_data(pseq_prop_dori))[,"Data"],
+                   relative_abund_perc=as.vector(dori_perc))
+#Save table
+write.table(df_dori,file="./results/Compositions/doriopsillibacter_relative_abundances_percentage_def.tsv",sep = "\t",row.names = F)
+```
+
+# ASVs relative abundances 
+```{r}
+#Save table proportions
+write.csv(data.frame(otu_table(pseq_prop)),file="./results/Compositions/ASVs_relative_abundances.csv")
+#Save table percentages
+write.csv(data.frame(otu_table(pseq_prop))*100,file="./results/Compositions/ASVs_relative_abundances_percentages.csv")
+```
+
+# Krona Plots (Full Taxonomy, from Domain to ASV)
+```{r,eval=FALSE,include=TRUE}
+#Create phyloseq for krona
+pseq_raw_krona=pseq
+#Get tax table
+d=as.data.frame(tax_table(pseq))
+#Change NAs for "Unclassified"
+d[is.na(d)]<-"Unclassified"
+#Update tax table
+tax_table(pseq_raw_krona)<-tax_table(as.matrix(d))
+##Get Krona composition for each Replica sample
+psadd::plot_krona(pseq_raw_krona, output = "./results/Compositions/kronas", variable = "Replica")
+```
+
+# PCA
+
+We will perform a PCA by previously transforming the count matrix at the ASVs level by the Centered Log Ration (CLR) method, which together with the use of the Euclidean Distance, is equivalent to the Aitchison Distance. In this case, we will use to ready to use implementation of this transformation of the Microbiome package. In addition, prior to any transformation or analysis, we will filter out low abundant taxa, keeping those with a relative abundance greater than 0.0001 (0.01%) in at least one of the samples to eliminate noise. 
+
+## Set groups colors
+```{r}
+#Maria's Palette
+color_sampletype=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",`reproductive organs`="#2ca02cff",
+                   `seawater transport`="#0055d4ff",slime="#d35fbcff",`slime incubation`="#800080ff",seawater="#80b3ff",
+                   negative="#000000ff")
+#Subset palettes
+color_sampletype_subset1=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",`reproductive organs`="#2ca02cff",
+                   negative="#000000ff")
+color_sampletype_subset2=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",
+                           slime="#d35fbcff",`slime incubation`="#800080ff")
+```
+
+## Get top replicates
+```{r}
+#Get counts per replica sample and add to metadata
+sample_data(pseq)$counts = colSums(otu_table(pseq))
+#Get list of top replicas using dplyr
+top_replicas_info=data.frame(sample_data(pseq)) %>% dplyr::group_by(SampleName) %>% dplyr::slice(which.max(counts))
+#Keep samples of interest
+pseq_reptop=subset_samples(pseq,Replica %in% top_replicas_info$Replica)
+pseq_reptop<-prune_taxa(taxa_sums(pseq_reptop)>0,pseq_reptop)
+pseq_reptop
+```
+
+```{r,eval=FALSE}
+#Save list of top_replicates
+write(paste(top_replicas_info$Replica,collapse = "\n"),file ="./results/top_replicates_list.txt")
+```
+
+## All Replica Samples
+
+A) Let's make a 2D PCA:
+```{r}
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_prop=microbiome::transform(pseq,"compositional")
+pseq_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_prop_fs=filter_taxa(pseq_prop,filter_func,TRUE)
+pseq_prop_fs_taxa=row.names(tax_table(pseq_prop_fs))
+pseq_fs_low=prune_taxa(pseq_prop_fs_taxa,pseq)
+pseq_fs_low<-prune_taxa(taxa_sums(pseq_fs_low)>0,pseq_fs_low)
+pseq_fs_low
+##Transform to clr
+pseq_clr <- microbiome::transform(pseq_fs_low,"clr")
+pseq_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca1 = phyloseq::plot_ordination(pseq_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca1 <- pca1 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca1 <- pca1 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca1 <-pca1 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca1=pca1+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca1=pca1+scale_colour_manual(values = color_sampletype)
+##Show graph result
+print(pca1)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca1,file="./results/PCA/Replicates_All/PCA2D_all_replicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+#Get interactive 3d plot
+fig_pca1_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+fig_pca1_3d <- fig_pca1_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca1_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca1_3d), "./results/PCA/Replicates_All/PCA3D_all_replicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 16)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_All/all_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+## Replica Samples Subset1 (with-out slime-related and with-out seawater samples)
+
+A) Let's make a 2D PCA:
+```{r}
+#Keep samples of interest
+int_groups=c("gills","digestive system","negative","reproductive organs","mantle")
+pseq_subset=subset_samples(pseq,SampleType %in% int_groups)
+pseq_subset<-prune_taxa(taxa_sums(pseq_subset)>0,pseq_subset)
+pseq_subset
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_subset_prop=microbiome::transform(pseq_subset,"compositional")
+pseq_subset_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_subset_prop_fs=filter_taxa(pseq_subset_prop,filter_func,TRUE)
+pseq_subset_prop_fs_taxa=row.names(tax_table(pseq_subset_prop_fs))
+pseq_subset_fs_low=prune_taxa(pseq_subset_prop_fs_taxa,pseq_subset)
+pseq_subset_fs_low<-prune_taxa(taxa_sums(pseq_subset_fs_low)>0,pseq_subset_fs_low)
+pseq_subset_fs_low
+##Transform to clr
+pseq_subset_clr <- microbiome::transform(pseq_subset_fs_low,"clr")
+pseq_subset_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_subset_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca2 = phyloseq::plot_ordination(pseq_subset_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca2 <- pca2 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca2 <- pca2 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca2 <-pca2 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca2=pca2+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca2=pca2+scale_colour_manual(values = color_sampletype_subset1)
+##Show graph result
+print(pca2)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca2,file="./results/PCA/Replicates_subset1/PCA2D_subset1_replicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_subset_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+
+#Get interactive 3d plot
+fig_pca2_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype_subset1,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+
+fig_pca2_3d <- fig_pca2_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca2_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca2_3d), "./results/PCA/Replicates_subset1/PCA3D_subset1_replicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_subset_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_subset_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_subset_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 16)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset1/subset1_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+## Replica Samples Subset2 (with-out seawater, negative, gut, repro samples)
+
+A) Let's make a 2D PCA:
+```{r}
+#Keep samples of interest
+int_samples=c("digest-whole_Jun17","reproductive_Jul21A","reproductive_Jul21B","reproductive_Jun17","negative",
+"seawater-transport_Jul21","seawater_Jun21","seawater-transport_May21")
+pseq_subset2=subset_samples(pseq,!SampleName %in% int_samples)
+pseq_subset2<-prune_taxa(taxa_sums(pseq_subset2)>0,pseq_subset2)
+pseq_subset2
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_subset2_prop=microbiome::transform(pseq_subset2,"compositional")
+pseq_subset2_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_subset2_prop_fs=filter_taxa(pseq_subset2_prop,filter_func,TRUE)
+pseq_subset2_prop_fs_taxa=row.names(tax_table(pseq_subset2_prop_fs))
+pseq_subset2_fs_low=prune_taxa(pseq_subset2_prop_fs_taxa,pseq_subset2)
+pseq_subset2_fs_low<-prune_taxa(taxa_sums(pseq_subset2_fs_low)>0,pseq_subset2_fs_low)
+pseq_subset2_fs_low
+##Transform to clr
+pseq_subset2_clr <- microbiome::transform(pseq_subset2_fs_low,"clr")
+pseq_subset2_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_subset2_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca3 = phyloseq::plot_ordination(pseq_subset2_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca3 <- pca3 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca3 <- pca3 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca3 <-pca3 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca3=pca3+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca3=pca3+scale_colour_manual(values = color_sampletype_subset2)
+##Show graph result
+print(pca3)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca3,file="./results/PCA/Replicates_subset2/PCA2D_subset2_replicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_subset2_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+
+#Get interactive 3d plot
+fig_pca3_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype_subset2,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+
+fig_pca3_3d <- fig_pca3_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca3_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca3_3d), "./results/PCA/Replicates_subset2/PCA3D_subset2_replicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 16)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/Replicates_subset2/subset2_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+## All Samples (Top Replica)
+
+A) Let's make a 2D PCA:
+```{r}
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_reptop_prop=microbiome::transform(pseq_reptop,"compositional")
+pseq_reptop_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_reptop_prop_fs=filter_taxa(pseq_reptop_prop,filter_func,TRUE)
+pseq_reptop_prop_fs_taxa=row.names(tax_table(pseq_reptop_prop_fs))
+pseq_reptop_fs_low=prune_taxa(pseq_reptop_prop_fs_taxa,pseq_reptop)
+pseq_reptop_fs_low<-prune_taxa(taxa_sums(pseq_reptop_fs_low)>0,pseq_reptop_fs_low)
+pseq_reptop_fs_low
+##Transform to clr
+pseq_reptop_clr <- microbiome::transform(pseq_reptop_fs_low,"clr")
+pseq_reptop_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_reptop_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca4 = phyloseq::plot_ordination(pseq_reptop_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca4 <- pca4 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca4 <- pca4 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca4 <-pca4 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca4=pca4+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca4=pca4+scale_colour_manual(values = color_sampletype)
+##Show graph result
+print(pca4)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca4,file="./results/PCA/TopReplica_All/PCA2D_top_replicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_reptop_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+#Get interactive 3d plot
+fig_pca4_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+fig_pca4_3d <- fig_pca4_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca4_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca4_3d), "./results/PCA/TopReplica_All/PCA3D_top_replicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_reptop_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_reptop_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_reptop_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 16)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_All/top_replicates_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+## Top Replica Subset1 (with-out slime-related and with-out seawater samples)
+
+A) Let's make a 2D PCA:
+```{r}
+#Keep samples of interest
+int_groups=c("gills","digestive system","negative","reproductive organs","mantle")
+pseq_reptop_subset=subset_samples(pseq_reptop,SampleType %in% int_groups)
+pseq_reptop_subset<-prune_taxa(taxa_sums(pseq_reptop_subset)>0,pseq_reptop_subset)
+pseq_reptop_subset
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_reptop_subset_prop=microbiome::transform(pseq_reptop_subset,"compositional")
+pseq_reptop_subset_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_reptop_subset_prop_fs=filter_taxa(pseq_reptop_subset_prop,filter_func,TRUE)
+pseq_reptop_subset_prop_fs_taxa=row.names(tax_table(pseq_reptop_subset_prop_fs))
+pseq_reptop_subset_fs_low=prune_taxa(pseq_reptop_subset_prop_fs_taxa,pseq_reptop_subset)
+pseq_reptop_subset_fs_low<-prune_taxa(taxa_sums(pseq_reptop_subset_fs_low)>0,pseq_reptop_subset_fs_low)
+pseq_reptop_subset_fs_low
+##Transform to clr
+pseq_reptop_subset_clr <- microbiome::transform(pseq_reptop_subset_fs_low,"clr")
+pseq_reptop_subset_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_reptop_subset_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca5 = phyloseq::plot_ordination(pseq_reptop_subset_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca5 <- pca5 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca5 <- pca5 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca5 <-pca5 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca5=pca5+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca5=pca5+scale_colour_manual(values = color_sampletype_subset1)
+##Show graph result
+print(pca5)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca5,file="./results/PCA/TopReplica_subset1/PCA2D_subset1_topreplicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_reptop_subset_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+
+#Get interactive 3d plot
+fig_pca5_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype_subset1,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+
+fig_pca5_3d <- fig_pca5_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca5_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca5_3d), "./results/PCA/TopReplica_subset1/PCA3D_subset1_topreplicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_reptop_subset_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_reptop_subset_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_reptop_subset_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 17)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset1/top_replicates_subset1_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+## Top Replica Subset2 (with-out seawater, negative, gut, repro samples)
+
+A) Let's make a 2D PCA:
+```{r}
+#Keep samples of interest
+int_samples=c("digest-whole_Jun17","reproductive_Jul21A","reproductive_Jul21B","reproductive_Jun17","negative",
+"seawater-transport_Jul21","seawater_Jun21","seawater-transport_May21")
+pseq_reptop_subset2=subset_samples(pseq_reptop,!SampleName %in% int_samples)
+pseq_reptop_subset2<-prune_taxa(taxa_sums(pseq_reptop_subset2)>0,pseq_reptop_subset2)
+pseq_reptop_subset2
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+pseq_reptop_subset2_prop=microbiome::transform(pseq_reptop_subset2,"compositional")
+pseq_reptop_subset2_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_reptop_subset2_prop_fs=filter_taxa(pseq_reptop_subset2_prop,filter_func,TRUE)
+pseq_reptop_subset2_prop_fs_taxa=row.names(tax_table(pseq_reptop_subset2_prop_fs))
+pseq_reptop_subset2_fs_low=prune_taxa(pseq_reptop_subset2_prop_fs_taxa,pseq_reptop_subset2)
+pseq_reptop_subset2_fs_low<-prune_taxa(taxa_sums(pseq_reptop_subset2_fs_low)>0,pseq_reptop_subset2_fs_low)
+pseq_reptop_subset2_fs_low
+##Transform to clr
+pseq_reptop_subset2_clr <- microbiome::transform(pseq_reptop_subset2_fs_low,"clr")
+pseq_reptop_subset2_clr
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_reptop_subset2_clr, method="RDA",distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Print plot
+print(pcs_plot)
+```
+
+```{r,fig.height = 7, fig.width = 12}
+#Save percentage values for the first 2 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca6 = phyloseq::plot_ordination(pseq_reptop_subset2_clr, ord_pca, type="samples", color="SampleType") + coord_fixed(clr2 / clr1)
+##Modify axis and legend labels
+pca6 <- pca6 + labs(x=F_PC1,y=F_PC2,color='Groups')
+##Change theme and adjust parameters
+pca6 <- pca6 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca6 <- pca6 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca6=pca6+geom_point(size=4, alpha=0.75)
+#Use manually set colors
+pca6=pca6+scale_colour_manual(values = color_sampletype_subset2)
+##Show graph result
+print(pca6)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(pca6,file="./results/PCA/TopReplica_subset2/PCA2D_subset2_topreplicates_abunfiltered_Aitchison_ASVs.svg",height = 7, width = 12)
+```
+
+B) Let's make a 3D plot: 
+```{r}
+#Using library(plotly)
+#Get all PCA's ordination information values
+pca_values <- summary(ord_pca)
+##Get PCA's ordination information values for the first 3 components
+pca_df <- data.frame(pca_values$sites[,1:3])
+#Add metadata
+pca_meta <- merge(pca_df,sample_data(pseq_reptop_subset2_clr),by=0,all = TRUE)
+#Save percentage values for the first 3 components
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+clr3 <- ord_pca$CA$eig[3] / sum(ord_pca$CA$eig)
+#Set axis phrases
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+F_PC3 <- paste("PC3","[",round(clr3*100,digits = 2),"% ]")
+
+#Get interactive 3d plot
+fig_pca6_3d <- plot_ly(pca_meta, x = ~PC1, y = ~PC2, z = ~PC3, type="scatter3d",mode = 'markers',
+                      color = ~SampleType,colors=color_sampletype_subset2,text=~paste('Sample:',Replica),
+                      marker = list(size = 7,width = 2, line=list(color='black',width=1)))
+
+fig_pca6_3d <- fig_pca6_3d %>% layout(scene = list(xaxis = list(title = F_PC1),
+                     yaxis = list(title = F_PC2),
+                     zaxis = list(title = F_PC3)),
+                     legend=list(title=list(text='<b> Groups </b>')))
+```
+
+```{r,eval=FALSE}
+#Show plot
+fig_pca6_3d
+```
+
+```{r,eval=FALSE,include=TRUE}
+#Save interactive plot as html
+htmlwidgets::saveWidget(as_widget(fig_pca6_3d), "./results/PCA/TopReplica_subset2/PCA3D_subset2_topreplicates_abunfiltered_Aitchison_ASVs.html")
+```
+
+C) Let's get scores for PCA:
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_reptop_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_reptop_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_reptop_subset2_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc3_scores.svg",height = 10, width = 16)
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="./results/PCA/TopReplica_subset2/subset2_topreplicates_abunfiltered_Aitchison_ASVs_pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+# Clustering
+
+We will perform a clustering by previously transforming the count matrix at the ASVs level by the Centered Log Ration (CLR) method, which together with the use of the Euclidean Distance, is equivalent to the Aitchison Distance. We will used the "ward.D2" method for clustering, since Ward’s clustering finds the pair of clusters at each iteration that minimalizes the increase in total variance, as stated in this tutorial (https://www.nicholas-ollberding.com/post/introduction-to-the-statistical-analysis-of-microbiome-data-in-r/).  
+
+Now let's see the clustering of all the top-replicates:
+```{r,fig.height=7}
+#Get Aitchison Distance
+clr_matrix=t(data.frame(otu_table(pseq_reptop_clr)))
+clr_eucl_dist=dist(clr_matrix,method = "euclidean")
+#Get dendrogram
+dendrogram=as.dendrogram(hclust(clr_eucl_dist,method = "ward.D2"))
+#Give color codes
+meta <- data.frame(phyloseq::sample_data(pseq_reptop_clr))
+dendextend::labels_colors(dendrogram) <- color_sampletype[meta$SampleType][order.dendrogram(dendrogram)]
+#Add color groups
+par(cex=1.2,mar = c(2,2,2,10))
+plot(dendrogram,horiz = T)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+svg("./results/Clustering/clustering_Aitchison_wardD2.svg",height=10,width = 15)
+par(cex=1.2,mar = c(2,2,2,10))
+plot(dendrogram,horiz = T)
+dev.off()
+```
+
+# Skin Core
+```{r}
+#First let's use the pseq_reptop object and subset only skin samples
+#Keep samples of interest
+pseq_reptop_skin=subset_samples(pseq_reptop,SampleType =="mantle")
+pseq_reptop_skin<-prune_taxa(taxa_sums(pseq_reptop_skin)>0,pseq_reptop_skin)
+pseq_reptop_skin
+#Get proportions
+pseq_reptop_skin_prop=microbiome::transform(pseq_reptop_skin,"compositional")
+```
+
+Will set a prevalence threshold of 100% (all prevalent in 7 samples). Let's try different abundance thresholds:
+```{r}
+#Set thresholds
+PREV=1
+ABUND=0.0001
+##Get Core  phylosep object
+pseq_reptop_skin_core <- core(pseq_reptop_skin_prop, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_reptop_skin_core
+```
+
+Using an abundance threshold of 0.0001 (0.01%) we get 28 all prevalent ASVs. If we use a higher abundance threshold of 0.001 only 3 ASVs survive. If we use an even higher abundand threshold of 0.01 only 1 ASV survives. And show we are going to keep the first abundance threshold. 
+
+Let's see their taxonomy:
+```{r}
+tax_table(pseq_reptop_skin_core)
+```
+
+As we can see there are two ASVs that could not be classified at any tax level (ASV_3 and ASV_34), in the SILVA classification this two ASVs were classified up to Family/Flavobacteriaceae and Genus/Candidatus Endoecteinascidia, respectively. The rest of the ASVs are all Bacteria, all Proteobacteria and all Gammaproteobacteria. All of them were classified up to the genus level with the exception of ASV_59. Doriopsillibacter presents the most number of ASVs (11 out of 28), the rest mostly belongs to the order Enterobacterales with variuos representatives (Dickeya,Pantoea, Erwinia, Serratia_F, Escherichia, Yersinia, Aeromonas) and a few representatives of the order Pseudomonadales (Saccharospirillum, Halomonas, and ASV_59 for family Pseudomonadaceae).
+
+A) Let's make a heatmap show the prevalences of these 28 ASVs depending of different abundance thresholds:    
+```{r}
+##Set parameters
+prevalences <- seq(.05, 1, .05)
+detections <- c(0.01, 0.1, 0.5, 1,5,10)/100
+color=rev(RColorBrewer::brewer.pal(9, "Spectral"))
+##Initial Plot to get data
+p_core <- plot_core(pseq_reptop_skin_core, plot.type = "heatmap", colours = color,
+    prevalences = prevalences, detections = detections)
+#Get input format
+input_data=reshape2::acast(p_core$data,Taxa~DetectionThreshold,value.var = "Prevalence")
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data=input_data[names(taxa_avg_abund(pseq_reptop_skin_core)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_reptop_skin_core))) {
+  temp_row=paste(tax_table(pseq_reptop_skin_core)[i,"ASV"],
+                 tax_table(pseq_reptop_skin_core)[i,"family"],
+                 tax_table(pseq_reptop_skin_core)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data)=new_rownames
+
+color_cor=rev(RColorBrewer::brewer.pal(n = 10, name = "Spectral"))
+color_cor=RColorBrewer::brewer.pal(n = 10, name = "Greens")
+
+##Get initial heatmap
+htA1<-ComplexHeatmap::Heatmap(input_data, heatmap_legend_param=list(title="Prevalence",at=c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)),
+                              show_column_names = TRUE, row_order = rownames(input_data), column_order = colnames(input_data),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 1),
+                              col = color_cor,rect_gp = grid::gpar(col = "black", lwd = 2))
+
+##ajust legend and convert to ggplot
+gb_htA1=grid::grid.grabExpr(draw(htA1, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA1=ggpubr::as_ggplot(gb_htA1)
+gb_htA1
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(gb_htA1,file="./results/Core/Skin_Core_Toprep_abund-0.0001_prev-1_ASVs.svg",height = 8, width = 10)
+```
+
+B) Let's repeat the previus heatmap but showing appereance in individuals and showing abundace thresholds in percentages:
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_reptop_skin_core)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_reptop_skin_core)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_reptop_skin_core))) {
+  temp_row=paste(tax_table(pseq_reptop_skin_core)[i,"ASV"],
+                 tax_table(pseq_reptop_skin_core)[i,"family"],
+                 tax_table(pseq_reptop_skin_core)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 7, name = "Greens")[2:7],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4,5,6,7)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 2))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+```
+
+```{r,eval=FALSE}
+#Save the plot
+ggsave(gb_htA2,file="./results/Core/Skin_Core_Toprep_abund-0.0001_prev-1_ASVs_by_individual_in_abund-percentages.svg",height = 8, width = 10)
+```
+
+C) Now let's make a heatmap showing the abundances of the skin core ASVs:
+```{r}
+#Get inputs
+
+##Get list of core skin taxa
+core_skin_ASVs=row.names(tax_table(pseq_reptop_skin_core))
+
+##Get core skin proportions for all samples
+pseq_reptop_skin_core_allsamples=prune_taxa(core_skin_ASVs,pseq_reptop_prop)
+
+##Get Proportions table converting it to percentages
+core_ASV_perc=data.frame(otu_table(pseq_reptop_skin_core_allsamples))*100
+##Change taxa names to full taxonomy
+core_ASV_tax=data.frame(tax_table(pseq_reptop_skin_core_allsamples))
+row.names(core_ASV_perc)=paste(core_ASV_tax$ASV,core_ASV_tax$family,core_ASV_tax$genus,sep =" | ")
+##Change samples names
+samples_data=data.frame(sample_data(pseq_reptop_skin_core_allsamples))
+colnames(core_ASV_perc)=samples_data$SampleName
+
+##Get order labels info(taxa) and set colors
+order_info=core_ASV_tax$order
+##Set color manually
+order_col=c(Tethybacterales="#46edc8",Enterobacterales="#fdf289",Pseudomonadales="#374d7c")
+
+##Get SampleType labels (samples) and set colors
+sample_info=samples_data$SampleType
+```
+
+```{r}
+library(ComplexHeatmap)
+
+#Color Function for Heatmap
+#col3=circlize::colorRamp2(c(0,0.01,0.05,0.1,0.2,0.4,0.6,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 9, name = "RdYlBu"))))
+#col3=circlize::colorRamp2(c(0,0.001,0.005,0.01,0.05,0.1,0.2,0.4,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 10, name = "RdYlBu"))))
+col3=circlize::colorRamp2(c(0,0.01,0.1,0.5,1,5,10,20,40,80,100), c(rev(RColorBrewer::brewer.pal(n = 11, name = "RdYlBu"))))
+#Get Top annotations 
+top_info <- HeatmapAnnotation(gp = gpar(col = "black"),show_annotation_name = T,show_legend=F,
+                              Groups=sample_info,col = list(Groups=color_sampletype))
+#Heatmap
+ht_top<-Heatmap(core_ASV_perc,show_column_names = T,
+              col = col3,
+              border_gp = grid::gpar(col = "black", lty = 1),
+              rect_gp = grid::gpar(col = "black", lwd = 2),
+              column_order = names(sort(unlist(core_ASV_perc["ASV_1 | Persebacteraceae | Doriopsillibacter",]),decreasing = T)),
+              row_order = rownames(input_data2),
+              #clustering_distance_rows = "euclidean",clustering_method_rows = "ward.D2",
+              #clustering_distance_columns = "euclidean",clustering_method_columns = "ward.D2",
+              show_heatmap_legend = F,row_names_max_width = unit(20, "cm"),
+              top_annotation = top_info)
+
+#Convert to ggplot
+gb_ht_top=grid.grabExpr(draw(ht_top))
+gb_ht_top=ggpubr::as_ggplot(gb_ht_top)
+
+#Create legend in the desired order
+#Create and combine legends
+lgd1=Legend(col_fun = col3,title="Relative Abundances (%)",at=c(0,10,20,40,60,80,100),legend_width = unit(8, "cm"),direction = "horizontal")
+lgd2=Legend(labels = names(color_sampletype),legend_gp = gpar(fill=color_sampletype),title = "Groups",ncol = 2)
+pd = packLegend(lgd1, lgd2, direction = "horizontal")
+#Convert to ggplot
+gb_L= grid.grabExpr(draw(pd))
+gg_L=ggpubr::as_ggplot(gb_L)
+core_heatmap<-cowplot::plot_grid(gg_L,gb_ht_top,nrow = 2,rel_heights = c(0.75,5))
+```
+
+```{r,fig.width=10,fig.height=10}
+#Show final figure
+core_heatmap
+```
+
+```{r}
+#Save plot
+ggsave(plot=core_heatmap,filename = "./results/Core/core_skin_ASVs_heatmap_percentages_all_top-replica.pdf",height = 10, width = 10,scale = 1)
+```
+
+```{r}
+#Save table
+write.csv(core_ASV_perc,file="./results/Core/core_skin_ASVs_relative_abundances_perc.csv")
+```
+
+# Heatmap top taxa
+
+Now let's make a heatmap showing the abundances of the ASVs with at more than 0.01 relative abundance (1%) in at least two of the top replicates samples:
+```{r}
+#Filter 
+##Get list with ASVs with relative abundance > 0.01 in at least 2 of the samples
+pseq_reptop_prop=microbiome::transform(pseq_reptop,"compositional")
+pseq_reptop_prop
+filter_func=genefilter::filterfun(genefilter::kOverA(2,0.01))
+pseq_reptop_prop_toptax=filter_taxa(pseq_reptop_prop,filter_func,TRUE)
+pseq_reptop_prop_toptax
+#See how much relative abundance per sample
+colSums(otu_table(pseq_reptop_prop_toptax))
+```
+
+```{r}
+#Get inputs
+
+##Get Proportions for top 1% ASVs and convert to percentages
+top_ASV_perc=data.frame(otu_table(pseq_reptop_prop_toptax))*100
+##Change taxa names to full taxonomy
+top_ASV_tax=data.frame(tax_table(pseq_reptop_prop_toptax))
+row.names(top_ASV_perc)=paste(top_ASV_tax$ASV,top_ASV_tax$class,top_ASV_tax$order,top_ASV_tax$family,top_ASV_tax$genus,sep =" | ")
+##Change samples names
+samples_data=data.frame(sample_data(pseq_reptop_prop_toptax))
+colnames(top_ASV_perc)=samples_data$SampleName
+
+##Get phylum labels info(taxa) and set colors
+phy_info=top_ASV_tax$phylum
+leyend_uniq_tax_phy=na.exclude(unique(top_ASV_tax$phylum))
+phy_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax_phy))
+names(phy_colors)=leyend_uniq_tax_phy
+
+##Get SampleType labels (samples) and set colors
+sample_info=samples_data$SampleType
+```
+
+```{r}
+library(ComplexHeatmap)
+#Get Top annotations 
+top_info <- HeatmapAnnotation(gp = gpar(col = "black"),show_annotation_name = T,show_legend=F,
+                              Groups=sample_info,col = list(Groups=color_sampletype))
+#Get Lateral annotations 
+lateral_info <-rowAnnotation(Phylum=phy_info, show_annotation_name = T,show_legend=F,
+                          col=list(Phylum=phy_colors),gp = gpar(col = "black"))
+#Color Function for Heatmap
+#col3=circlize::colorRamp2(c(0,0.01,0.05,0.1,0.2,0.4,0.6,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 9, name = "RdYlBu"))))
+#col3=circlize::colorRamp2(c(0,0.001,0.005,0.01,0.05,0.1,0.2,0.4,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 10, name = "RdYlBu"))))
+col3=circlize::colorRamp2(c(0,0.01,0.1,0.5,1,5,10,20,40,80,100), c(rev(RColorBrewer::brewer.pal(n = 11, name = "RdYlBu"))))
+
+#Heatmap
+ht_top<-Heatmap(top_ASV_perc,show_column_names = T,
+              col = col3,
+              border_gp = grid::gpar(col = "black", lty = 1),
+              rect_gp = grid::gpar(col = "black", lwd = 2),
+              clustering_distance_rows = "euclidean",clustering_method_rows = "ward.D2",
+              clustering_distance_columns = "euclidean",clustering_method_columns = "ward.D2",
+              show_heatmap_legend = F,row_names_max_width = unit(20, "cm"),
+              top_annotation = top_info,
+              right_annotation = lateral_info)
+
+#Convert to ggplot
+gb_ht_top=grid.grabExpr(draw(ht_top))
+gb_ht_top=ggpubr::as_ggplot(gb_ht_top)
+
+#Create legend in the desired order
+#Create and combine legends
+lgd1=Legend(col_fun = col3,title="Relative Abundances (%)",at=c(0,10,20,40,60,80,100),legend_width = unit(8, "cm"),direction = "horizontal")
+lgd2=Legend(labels = names(color_sampletype),legend_gp = gpar(fill=color_sampletype),title = "Groups",ncol = 2)
+lgda=Legend(labels = names(phy_colors),legend_gp = gpar(fill=phy_colors),title = "Tax Level: Phylum",ncol = 2)
+pd = packLegend(lgd1, lgd2, lgda,direction = "horizontal")
+#Convert to ggplot
+gb_L= grid.grabExpr(draw(pd))
+gg_L=ggpubr::as_ggplot(gb_L)
+top_heatmap<-cowplot::plot_grid(gg_L,gb_ht_top,nrow = 2,rel_heights = c(0.5,5))
+```
+
+```{r,fig.width=15,fig.height=15}
+#Show final figure if more than 1% in at least 2 samples
+top_heatmap
+```
+
+```{r,fig.width=15,fig.height=34}
+#Show final figure if more than 1% in at least 1 sample
+top_heatmap
+```
+
+```{r}
+#Save plot figure if more than 1% in at least 2 samples
+ggsave(plot=top_heatmap,filename = "./results/TopTaxa/top_ASV_1perc_all_top-replicates_2SAMPLES.pdf",height = 15, width = 15,scale = 1)
+#Save plot figure if more than 1% in at least 1 sample
+ggsave(plot=top_heatmap,filename = "./results/TopTaxa/top_ASV_1perc_all_top-replicates_1SAMPLE.pdf",height = 34, width = 15,scale = 1)
+```
+
+
+# Correlations with BAnOCC
+
+## Get inputs
+```{r}
+#Get compiled banocc model
+compiled_banocc_model <- rstan::stan_model(model_code = banocc::banocc_model)
+#Save model for later
+#save(compiled_banocc_model,file="./data/compiled_banocc_model.RData")
+#Load model
+load("./data/compiled_banocc_model.RData")
+```
+
+```{r}
+#Get input table
+#Apply Abund filter
+#Get list of ASV for subseting
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_reptop_skin_prop_fs=filter_taxa(pseq_reptop_skin_prop,filter_func,TRUE)
+pseq_reptop_skin_prop_fs_taxa=row.names(tax_table(pseq_reptop_skin_prop_fs))
+colSums(otu_table(pseq_reptop_skin_prop_fs))
+##Get counts
+pseq_reptop_skin_fs_low=prune_taxa(pseq_reptop_skin_prop_fs_taxa,pseq_reptop_skin)
+pseq_reptop_skin_fs_low<-prune_taxa(taxa_sums(pseq_reptop_skin_fs_low)>0,pseq_reptop_skin_fs_low)
+pseq_reptop_skin_fs_low
+##Get proportions again
+pseq_reptop_skin_fs_low_prop=microbiome::transform(pseq_reptop_skin_fs_low,"compositional")
+#Get count matrix
+input_reptop_skin_fs=t(data.frame(otu_table(pseq_reptop_skin_fs_low_prop)))
+```
+```{r}
+#Save input_reptop_skin_fs
+save(input_reptop_skin_fs,file="./data/input_reptop_skin_fs.RData")
+```
+
+
+
+```{r}
+pseq_reptop_skin_genus=tax_glom(pseq_reptop_skin,taxrank = "genus",NArm = FALSE)
+pseq_reptop_skin_genus_prop=microbiome::transform(pseq_reptop_skin_genus,"compositional")
+input_reptop_skin_genus=t(data.frame(otu_table(pseq_reptop_skin_genus_prop)))
+ccrepe_output=ccrepe(x=input_reptop_skin_genus, sim.score = nc.score, iterations = 1000, min.subj = 7,verbose = TRUE)
+```
+
+
+```{r}
+#Run banocc
+b_fit <- banocc::run_banocc(C = input_reptop_skin_genus, compiled_banocc_model=compiled_banocc_model,
+                            chains = 4, cores = 4, iter = 5000, a = 0.5, b=10, verbose = TRUE)
+```
+
+
+```{r}
+b_output <- banocc::get_banocc_output(banoccfit=b_fit)
+```
+
+---
+
+```{r}
+# Apll
+
+
+#Get list of ASV for subseting
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.0001 in at least one of the samples
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.0001))
+pseq_reptop_skin_prop_fs=filter_taxa(pseq_reptop_skin_prop,filter_func,TRUE)
+pseq_reptop_skin_prop_fs_taxa=row.names(tax_table(pseq_reptop_skin_prop_fs))
+colSums(otu_table(pseq_reptop_skin_prop_fs))
+##Get indices in input table
+taxa_to_compare=which(colnames(t_pseq_reptop_skin_prop_count_table) %in% pseq_reptop_skin_prop_fs_taxa)
+length(taxa_to_compare)
+
+#Run correlation test with CCrepe
+ccrepe_output=ccrepe(x=t_pseq_reptop_skin_prop_count_table, sim.score = nc.score, iterations = 1000, min.subj = 7,verbose = TRUE,subset.cols.x=as.numeric(taxa_to_compare))
+```
+
+
+
+```{r}
+#Paja mental 1
+pseq_reptop_fs_skin_low=prune_taxa(pseq_reptop_skin_prop_fs_taxa,pseq_reptop_skin)
+pseq_reptop_fs_skin_low<-prune_taxa(taxa_sums(pseq_reptop_fs_skin_low)>0,pseq_reptop_fs_skin_low)
+pseq_reptop_fs_skin_low
+
+library(SpiecEasi)
+se_mb <- spiec.easi(pseq_reptop_fs_skin_low, method='mb', 
+                    lambda.min.ratio=1e-2, nlambda=20,pulsar.params=list(rep.num=50, ncores=3))
+se_net <- adj2igraph(getRefit(se_mb), 
+                     rmEmptyNodes = TRUE, diag = FALSE, 
+                     vertex.attr = list(name = taxa_names(pseq_reptop_fs_skin_low)))
+plot_network(se_net, pseq_reptop_fs_skin_low)
+```
+
+```{r}
+#Paja Mental2
+pp=sparcc(t(otu_table(pseq_reptop_fs_skin_low)))
+## Define arbitrary threshold for SparCC correlation matrix for the graph
+sparcc.graph <- abs(pp$Cor) >= 0.3
+diag(sparcc.graph) <- 0
+library(Matrix)
+sparcc.graph <- Matrix(sparcc.graph, sparse=TRUE)
+## Create igraph objects
+ig.sparcc <- adj2igraph(sparcc.graph)
+
+
+library(igraph)
+## set size of vertex proportional to clr-mean
+vsize    <- rowMeans(clr(otu_table(pseq_reptop_fs_skin_low), 1))+6
+plot(ig.sparcc, vertex.size=vsize, vertex.label=NA, main="sparcc")
+```

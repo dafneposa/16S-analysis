@@ -1,0 +1,163 @@
+---
+title: "Track_table dataset-1"
+author: "Dafne Porcel Sanchis"
+date: "9/28/2022"
+output: html_document
+---
+
+<div style="text-align: justify">
+
+#Load Library
+```{r}
+library(ShortRead)
+```
+
+
+#Common
+```{r}
+#Common patterns
+fastq_pat_r1="_R1.fastq.gz"
+#Common funtion
+getN <- function(x) sum(dada2::getUniques(x))
+```
+
+#Get Raw Counts
+```{r}
+#Get path to raw fastq directory
+path0="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/raw_fastq"
+#Set pattern
+fastq_pat_raw="_R1_001.fastq.gz"
+#Object
+raw_count=countFastq(path0, pattern = fastq_pat_raw)
+#Change sample names
+row.names(raw_count)=sapply(strsplit(row.names(raw_count),"_L001_R1_001.fastq.gz"),`[`,1)
+#Get columns of interest
+raw_count=subset(raw_count,select=-c(nucleotides,scores))
+#Change column name
+colnames(raw_count)="raw_count"
+#Get extra-column with sample-names for merging
+raw_count$names=row.names(raw_count)
+```
+
+#Get Counts Post-Primer-Trim
+```{r}
+#Get Post-Primer Removal counts
+##paths
+path2_r1="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/primer_removed_fastqs_2/R1"
+
+##Objects
+Post_trimPrim_R1=countFastq(path2_r1, pattern = fastq_pat_r1)
+
+#Change sample names
+row.names(Post_trimPrim_R1)=sapply(strsplit(row.names(Post_trimPrim_R1),"_L001_trimPrim_R1.fastq.gz"),`[`,1)
+
+#Get columns of interest
+Post_trimPrim_R1=subset(Post_trimPrim_R1,select=-c(nucleotides,scores))
+
+#Change column name
+colnames(Post_trimPrim_R1)="count_Post_trimPrim"
+
+#Get extra-column with sample-names for merging
+Post_trimPrim_R1$names=row.names(Post_trimPrim_R1)
+
+```
+
+#Get Counts after DADA2 filter -trimming length (0,0)-
+```{r}
+#Get counts after DADA2 filter
+##paths
+path4_r1="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/qcDD2_0-0_fastqs"
+
+##Objects
+DD2_QC_R1=countFastq(path4_r1, pattern = fastq_pat_r1)
+
+#Change sample names
+row.names(DD2_QC_R1)=sapply(strsplit(row.names(DD2_QC_R1),"_L001_trimPrim_qcDD2_R1.fastq.gz"),`[`,1)
+
+#Get columns of interest
+DD2_QC_R1=subset(DD2_QC_R1,select=-c(nucleotides,scores))
+
+#Change column name
+colnames(DD2_QC_R1)="count_qcDD2_trimlen_0-0"
+
+#Get extra-column with sample-names for merging
+DD2_QC_R1$names=row.names(DD2_QC_R1)
+
+```
+
+#Get DD2_denoisedR1,DD2_denoisedR2, and DD2_merged_reads
+```{r}
+#Get track from DADA2 Ori1 results
+
+##Path 
+ori1_results="/storage/tbc/nudibranquios/DADA2/R_Objects"
+
+##Load files
+load(file=paste(ori1_results,"/dada_objects.RData",sep=""))
+load(file=paste(ori1_results,"/merge_object.RData",sep=""))
+
+##Get DD2_denoisedR1
+DD2_denoisedR1=data.frame(count_DD2_denoisedR1=sapply(dadaFs, getN))
+#Change sample names
+row.names(DD2_denoisedR1)=sapply(strsplit(row.names(DD2_denoisedR1),"_trimAdapt"),`[`,1)
+#Get extra-column with sample-names for merging
+DD2_denoisedR1$names=row.names(DD2_denoisedR1)
+
+##Get DD2_denoisedR2
+DD2_denoisedR2=data.frame(count_DD2_denoisedR2=sapply(dadaRs, getN))
+#Change sample names
+row.names(DD2_denoisedR2)=sapply(strsplit(row.names(DD2_denoisedR2),"_trimAdapt"),`[`,1)
+#Get extra-column with sample-names for merging
+DD2_denoisedR2$names=row.names(DD2_denoisedR2_ori1)
+
+##Get DD2_merged_reads
+DD2_merged_reads=data.frame(count_DD2_merged_reads=sapply(mergers, getN))
+#Change sample names
+row.names(DD2_merged_reads)=sapply(strsplit(row.names(DD2_merged_reads),"_trimAdapt"),`[`,1)
+#Get extra-column with sample-names for merging
+DD2_merged_reads$names=row.names(DD2_merged_reads)
+
+```
+
+#Get DD2_merged_oris and DD2_nonchim
+```{r}
+##Path
+merge_results="/storage/tbc/nudibranquios/DADA2/R_Objects_merged/Merge_Before_ChimRm"
+
+##Load files
+load(file=paste(merge_results,"/seqtabnochim_object.RData",sep=""))
+
+##Get DD2_nonchim
+DD2_nonchim=data.frame(count_DD2_nonchim=rowSums(seqtab_merged.nochim))
+
+#Change sample names
+row.names(DD2_nonchim)=sapply(strsplit(row.names(DD2_nonchim),"_trimAdapt"),`[`,1)
+
+#Get extra-column with sample-names for merging
+DD2_nonchim$names=row.names(DD2_nonchim)
+```
+
+```{r}
+#Save data.frames
+save(raw_count,Post_trimPrim_R1,
+     DD2_QC_0_0_R1,DD2_QC_0_10_R1,
+     DD2_QC_5_5_R1, DD2_QC_5_10_R1,
+     DD2_denoisedR1, DD2_denoisedR2, 
+     DD2_merged_reads)
+```
+
+#Construct track table
+```{r}
+#Make list
+df_list=list(raw_count,Post_trimPrim_R1,
+     DD2_QC_0_R1,
+     DD2_denoisedR1, DD2_denoisedR2, 
+     DD2_merged_reads)
+#Merging
+my_merge=function(df1, df2){merge(df1, df2, by = "names")}
+track_table=Reduce(my_merge, df_list)                             
+
+#Save Table
+pathO2="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM"
+write.table(track_table,paste(pathO2,"/track_table.tsv",sep=""),sep="\t",quote=F,col.names=NA)
+```

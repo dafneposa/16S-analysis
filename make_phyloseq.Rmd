@@ -1,0 +1,268 @@
+---
+title: "Nudibranchs 1 phyloseq object "
+subtitle: "Filter Mitochondria/Chloroplast and Make Phyloseq Object"
+author: "Samuel Piquer-Esteban and Dafne Porcel Sanchis"
+date: "Last modification `r format(Sys.time(), '%d %b %Y')`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+---
+
+<div style="text-align: justify">
+
+\newpage
+
+# Load Libraries
+```{r}
+library(phyloseq)
+library(microbiome)
+```
+
+# Load raw data
+```{r}
+#Load tables
+##row taxon/col samples
+count_table=read.table('/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/ASVs_counts_merged.tsv',header = T,sep='\t',row.names = 1,check.names = F)
+##Make sample_names compatible (remove "_trimAdapt" at the end name)
+colnames(count_table)=sapply(strsplit(colnames(count_table), "_trimAdapt"), `[`, 1)
+##row taxon(asv_ID)/col tax level 
+taxo_table=read.table('/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea2/ASVs_taxonomy_with_dory_both_thr50_raw.tsv',
+                      header = T,sep='\t',row.names = 1,check.names = F)
+##Add extra column with ASVs Names at right site
+taxo_table$ASV <- row.names(taxo_table)
+##row sample
+metadata=read.csv('/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/metadata_nudis_2/metadata_nudibranquios_conjunto_physeq.csv', 
+                    header = T,sep=';',row.names = 1,check.names = F)
+```
+
+\newpage
+
+# Apply filters
+
+## Remove Mitochondrial Sequences
+
+Let's remove all ASVs sequences classified as Mitochondria:
+```{r}
+#Define %not_in% function
+`%not_in%` <- purrr::negate(`%in%`)
+#Filter Mitochondria(family==Mitochondria)
+taxo_table_f=taxo_table[taxo_table$family %not_in% c('Mitochondria'),]
+count_table_f=count_table[row.names(count_table) %in% row.names(taxo_table_f),]
+```
+
+a) Let's see how many ASVs were Mitocochondria:
+```{r}
+table(taxo_table$family=="Mitochondria",exclude = NULL)
+```
+We can see that 17 ASVs sequences were classified as Mitochondria.
+
+b) Let's see how many sequences counts we remove:
+```{r}
+(1-sum(count_table_f)/sum(count_table))*100
+```
+We only remove 0.51% of all counts in the table due to Mitochondrias. 
+
+c) Let's see de percentage of read counts lost per sample:
+```{r}
+sort(100*((colSums(count_table)-colSums(count_table_f))/colSums(count_table)))
+```
+As we can see most of the samples don't lose many read counts for Mitochondrias. The samples that lose more counts are the gut2017_2_S31, gut2017_3_S58 and gut2017_1_S4 replicates, losing more than 14%. Which does not seem disturbing in this case.
+
+\newpage
+
+## Remove Chloroplast Sequences
+
+Let's remove all ASVs sequences classified as Chloroplast:
+```{r}
+#Define %not_in% function
+`%not_in%` <- purrr::negate(`%in%`)
+#Filter Chloroplast(order==Chloroplast)
+taxo_table_f2=taxo_table_f[taxo_table_f$order %not_in% c('Chloroplast'),]
+count_table_f2=count_table_f[row.names(count_table_f) %in% row.names(taxo_table_f2),]
+```
+
+a) Let's see how many ASVs were Chloroplast:
+```{r}
+table(taxo_table$order=="Chloroplast",exclude = NULL)
+```
+We can see that 184 ASVs sequences were classified as Chloroplast.
+
+b) Let's see how many sequences counts we remove:
+```{r}
+((sum(count_table_f)-sum(count_table_f2))/sum(count_table))*100
+```
+We remove 7.84% of all counts in the table due to Chloroplasts. 
+
+c) Let's see the percentage of read counts lost per sample:
+```{r}
+sort((colSums(count_table_f)-colSums(count_table_f2))/colSums(count_table))*100
+```
+As we can see most of the samples don't lose many read counts for Chloroplasts. Although the are two cases in which we lose quite a bit of read counts due to Chloroplast removal: 
+
+- Juneseawater Replicates (Juneseawater_2_S40, Juneseawater_1_S13 and Juneseawater_3_S67) lose more than 50% read counts.
+
+- gut2017 Replicates (gut2017_1_S4, gut2017_3_S58, gut2017_2_S31) lose around 80% read counts.
+
+\newpage
+
+# Make Phyloseq Object
+```{r}
+#Pre-format 
+##Taxa
+taxo_matrix=as.matrix(taxo_table_f2)
+TAX_PHY=tax_table(taxo_matrix)
+##Count_data as matrix
+table_matrix=as.matrix(count_table_f2)
+TABLE_PHY=otu_table(table_matrix,taxa_are_rows = T)
+##Metadata
+META_PHY=sample_data(metadata)
+#Transform to phyloseq object 
+pseq=phyloseq(TABLE_PHY,META_PHY,TAX_PHY)
+
+
+```
+
+```{r, eval=FALSE, include=TRUE}
+save(pseq, file = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/pseq_Nudibranchs_1_2.RData")
+```
+
+```{r}
+#Creamos un phyloseq object con solo las muestras de nudis2
+
+metadatos_nudis1_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/METADATA/metadata_nudibranchs_limpio_MD.csv"
+metadatos_nudis2_path <- "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/metadata_nudis_2/metadata_nudis2_4mayo.csv"
+
+metadatos_nudis1=read.table(metadatos_nudis1_path, header = T,sep='\t',row.names = 1,check.names = F)
+metadatos_nudis2 = read.csv(metadatos_nudis2_path, header = T,sep=';',row.names = 1,check.names = F)
+
+nudis1=c(rownames(metadatos_nudis1), c("JulyreproB_2_S47","JulyreproB_1_S20","JulyreproB_3_S74","JulyslimeB_1_S25","JulyslimeB_2_S52","JulyslimeB_3_S79"))
+nudis1=as.vector(nudis1)
+
+`%not_in%` <- purrr::negate(`%in%`)
+
+pseq_nudis2 <- subset_samples(pseq, Id %not_in% nudis1)
+
+save(pseq_nudis2, file = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/pseq_Nudibranchs_2.RData")
+```
+
+
+# Exploring some stats
+
+a) Let's see how many ASVs do we keep:
+```{r}
+pseq
+```
+We see that are a total of 11869 ASVs in 83 samples.
+
+b) Let's see how many total read counts are left:
+```{r}
+sum(otu_table(pseq))
+```
+We see that we keep 7380371 total read counts.
+
+c) Let's see read counts summary:
+```{r}
+summary(colSums(otu_table(pseq)))
+```
+\newpage
+
+d) Let's see read counts per sample:
+```{r}
+sort(colSums(otu_table(pseq)))
+```
+e) Let's see which samples show less 20.000 reads:
+```{r}
+sort(colSums(otu_table(pseq))[colSums(otu_table(pseq))<20000])
+```
+
+# Exploring unclassified counts
+
+Normally, I would remove ASVs that could not be classified at any taxonomic level (since they usually are a minor part of the read counts), but in this case we are going to keep them because we are exploring a particular unexplored environment.
+
+Let's see the percentage of unclassified read counts (meaning those ASVs that could not be classified at any taxonomy level):
+```{r}
+sort(colSums(otu_table(pseq)[is.na(tax_table(pseq)[,"domain"]),])/colSums(otu_table(pseq)))*100
+```
+As we can see JulygillsA replicates, present a unusual great percentage of unclassified reads, more than 65%. 
+
+a) Let's see which of these ASVs represent more than 3% in any of the samples/replicates:
+```{r}
+gtd_unclassified=row.names(otu_table(pseq)[is.na(tax_table(pseq)[,"domain"]),])
+pseq_prop=microbiome::transform(pseq,"compositional")
+perc_unclassified=data.frame(otu_table(pseq_prop)[gtd_unclassified,])*100
+perc_unclassified3=perc_unclassified[apply(perc_unclassified>3,1,any),]
+rownames(perc_unclassified3)
+```
+
+\newpage
+
+b) Let's see their percentages in the phyloseq object:
+```{r}
+tempASV="ASV_3"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_24"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_34"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_35"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_74"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_354"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+```{r}
+tempASV="ASV_356"
+tempvec=unlist(perc_unclassified3[tempASV,])
+tempvec[tempvec>3]
+```
+
+c) Let's see their classification in the conventional IDTAXA databases:
+
+| Unclassified ASV | GTDB-Mod          | SILVA-Mod                          |
+|------------------|-------------------|------------------------------------|
+| ASV_3            | Class/Bacteroidia | Family/Flavobacteriaceae           |
+| ASV_24           | Unclassified      | Domain/Bacteria                    |
+| ASV_34           | Unclassified      | Genus/Candidatus Endoecteinascidia |
+| ASV_35           | Unclassified      | Family/NS9 marine group            |
+| ASV_74           | Unclassified      | Unclassified                       |
+| ASV_354          | Unclassified      | Unclassified                       |
+| ASV_356          | Unclassified      | Unclassified                       |
+
+# Final Comments
+
+At this point, we must comment a few samples:
+
+- As mentioned in the task1 report, all the replicates of the repro2017 sample (repro2017_1_S2, repro2017_2_S29, repro2017_3_S56) we are losing around 80% of their original reads. All these replicates show less than 20.000 final read counts (7756,11971, 14367 read counts). We will have to keep an eye on these samples in the subsequent analyses and even eliminate them if we see that they show anomalous behavior. But I don't have a good feeling about this one.
+
+- In all the replicates of the gut2017 sample (gut2017_1_S4, gut2017_2_S31, gut2017_3_S58) we are losing around 94% of the recovered reads, due to filtering Mitochondria and Chloroplast. All these replicates show less than 20.000 final read counts (7959,5806, 7891 read counts). We will have to keep an eye on these samples in the subsequent analyses and even eliminate them if we see that they show anomalous behavior. But probably this sample could be eliminated.  
+
+- In all the replicates of the JulygillsA (JulygillsA_1_S22, JulygillsA_2_S49, JulygillsA_3_S76) more of the 65% of the final recovered reads are unclassified. Specially, ASV_3 represents aprox. 60% of the final recovered read counts. This is something that we should have into account in the subsequent analyses.

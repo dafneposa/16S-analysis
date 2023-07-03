@@ -1,0 +1,1019 @@
+---
+title: "Nudibranchs classifiction"
+subtitle: "Database Enrichment and Classification Results"
+author: 
+  - Dafne Porcel Sanchis
+date: "Last modification `r format(Sys.time(), '%d %b %Y')`"
+output:
+    html_document:
+      toc: yes
+      toc_depth: 3
+      number_sections: true
+      code_folding: hide
+    pdf_document:
+      toc: yes
+      number_sections: true
+      toc_depth: 3
+header-includes: 
+  - \renewcommand{\and}{\\}
+---
+<div style="text-align: justify">
+\newpage
+
+Cargamos los resultados de las clasificaciones
+```{r,  echo=FALSE}
+#Tabla de conteos
+ASVs_counts_path ="/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea1/DADA2/Merge_Before_ChimRm/ASVs_counts.tsv"
+ASVs_counts=read.table(ASVs_counts_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+#Database result
+silva_mod_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea2/DB_Results/Silva-Mod/ASVs_taxonomy_both_thr50_raw.tsv"
+silva_mod=read.table(silva_mod_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+
+gtdb_mod_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea2/DB_Results/GTDB-Mod/ASVs_taxonomy_both_thr50_raw.tsv"
+gtdb_mod=read.table(gtdb_mod_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+gtdb_sativa_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea2/DB_Results/Sativa-GTDB/ASVs_taxonomy_both_thr50_raw.tsv"
+gtdb_sativa=read.table(gtdb_sativa_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+
+gtdb_sativa_organelles_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea2/DB_Results/Sativa-GTDB_Organelles/ASVs_taxonomy_both_thr50_raw.tsv"
+gtdb_sativa_organelles=read.table(gtdb_sativa_organelles_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+gtdb_sativa_organelles_enriched_path <- "/Users/dafneporcelsanchis/Desktop/CURS_21_22/NUDIBRANQUIOS/FromSamu/Informes/Tarea2/DB_Results/Sativa-GTDB_Enriched/ASVs_taxonomy_both_thr50_raw.tsv"
+gtdb_sativa_organelles_enriched=read.table(gtdb_sativa_organelles_enriched_path,header = T,sep='\t',row.names = 1,check.names = F)
+
+```
+
+Cargamos las librerias necesarias
+```{r, echo=FALSE}
+# Libraries
+pacman::p_load("dplyr")
+pacman::p_load("ggplot2")
+pacman::p_load(gridExtra)
+pacman::p_load(ggpmisc)
+pacman::p_load(moments)
+pacman::p_load(scales)
+pacman::p_load(formattable)
+```
+
+
+## SILVA CLASIFICATION
+
+### ASVs per sample with Silva(mod)
+```{r}
+silva_dom_ASVs = vector()
+silva_phy_ASVs = vector()
+silva_cla_ASVs = vector()
+silva_ord_ASVs = vector()
+silva_fam_ASVs = vector()
+silva_gen_ASVs = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  silva_dom_ASVs_sample= sum(counts_sample[!is.na(silva_mod$domain),]!=0)/sum(counts_sample!=0)*100
+  silva_dom_ASVs = c(silva_dom_ASVs, silva_dom_ASVs_sample)
+  
+  silva_phy_ASVs_sample= sum(counts_sample[!is.na(silva_mod$phylum),]!=0)/sum(counts_sample!=0)*100
+  silva_phy_ASVs = c(silva_phy_ASVs, silva_phy_ASVs_sample)
+  
+  silva_cla_ASVs_sample= sum(counts_sample[!is.na(silva_mod$class),]!=0)/sum(counts_sample!=0)*100
+  silva_cla_ASVs = c(silva_cla_ASVs, silva_cla_ASVs_sample)
+  
+  silva_ord_ASVs_sample= sum(counts_sample[!is.na(silva_mod$order),]!=0)/sum(counts_sample!=0)*100
+  silva_ord_ASVs = c(silva_ord_ASVs, silva_ord_ASVs_sample)
+  
+  silva_fam_ASVs_sample= sum(counts_sample[!is.na(silva_mod$family),]!=0)/sum(counts_sample!=0)*100
+  silva_fam_ASVs = c(silva_fam_ASVs, silva_fam_ASVs_sample)
+  
+  silva_gen_ASVs_sample= sum(counts_sample[!is.na(silva_mod$genus),])/sum(counts_sample)*100
+  silva_gen_ASVs = c(silva_gen_ASVs, silva_gen_ASVs_sample)
+  
+}
+```
+
+```{r}
+silva_dom_ASVs <- as.data.frame(silva_dom_ASVs)
+silva_phy_ASVs <- as.data.frame(silva_phy_ASVs)
+silva_cla_ASVs <- as.data.frame(silva_cla_ASVs)
+silva_ord_ASVs <- as.data.frame(silva_ord_ASVs)
+silva_fam_ASVs <- as.data.frame(silva_fam_ASVs)
+silva_gen_ASVs <- as.data.frame(silva_gen_ASVs)
+
+data_ASVs_silva <- data.frame(silva_dom_ASVs, 
+                             silva_phy_ASVs, 
+                             silva_cla_ASVs, 
+                             silva_ord_ASVs, 
+                             silva_fam_ASVs,
+                             silva_gen_ASVs)
+
+colnames(data_ASVs_silva) = c("Domain", "Phylum", 
+                              "Class", "Order", 
+                              "Family", "Genus")
+
+data_boxplot <- stack(data_ASVs_silva)
+```
+
+```{r}
+statics_silva_ASV <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_silva_ASV_df <- as.data.frame(statics_silva_ASV)
+row.names(statics_silva_ASV_df) = statics_silva_ASV_df[,1]
+statics_silva_ASV_df =  select(statics_silva_ASV_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_silva_ASV_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+# Plot Silva
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot(outlier.size=0.7) + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified ASVs with Silva") +
+    xlab("Taxonomic level") + ylab("Classification %")  + stat_summary(aes(group=data_boxplot$ind),fun=mean, geom="point", shape=23, size=1, color="black", fill="blue") #+ theme_linedraw() + ylim(0,300) + geom_table_npc(data = summ1, label = list(summ1),npcx = 0.00, npcy = 1, hjust = 0, vjust = 1)
+
+
+```
+
+### Reads per sample with Silva(mod)
+```{r}
+silva_dom_count = vector()
+silva_phy_count = vector()
+silva_cla_count = vector()
+silva_ord_count = vector()
+silva_fam_count = vector()
+silva_gen_count = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  silva_dom_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$domain)],])/sum(counts_sample))*100
+  
+  silva_dom_count = c(silva_dom_count, silva_dom_count_sample)
+  
+  silva_phy_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$phylum)],])/sum(counts_sample))*100
+  silva_phy_count = c(silva_phy_count, silva_phy_count_sample)
+
+  silva_cla_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$class)],])/sum(counts_sample))*100
+    silva_cla_count = c(silva_cla_count, silva_cla_count_sample)
+
+  silva_ord_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$order)],])/sum(counts_sample))*100
+      silva_ord_count = c(silva_ord_count, silva_ord_count_sample)
+
+  silva_fam_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$family)],])/sum(counts_sample))*100
+        silva_fam_count = c(silva_fam_count, silva_fam_count_sample)
+
+  silva_gen_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(silva_mod)[!is.na(silva_mod$genus)],])/sum(counts_sample))*100
+          silva_gen_count = c(silva_gen_count, silva_gen_count_sample)
+
+}
+```
+
+```{r}
+silva_dom_count <- as.data.frame(silva_dom_count)
+silva_phy_count <- as.data.frame(silva_phy_count)
+silva_cla_count <- as.data.frame(silva_cla_count)
+silva_ord_count <- as.data.frame(silva_ord_count)
+silva_fam_count <- as.data.frame(silva_fam_count)
+silva_gen_count <- as.data.frame(silva_gen_count)
+
+data <- data.frame(silva_dom_count, silva_phy_count, silva_cla_count, silva_ord_count, silva_fam_count,silva_gen_count)
+
+colnames(data) = c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+
+data_boxplot <- stack(data)
+```
+
+
+```{r}
+statics_silva_read <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_silva_read_df <- as.data.frame(statics_silva_read)
+row.names(statics_silva_read_df) = statics_silva_read_df[,1]
+statics_silva_read_df =  select(statics_silva_read_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_silva_read_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+# Plot Silva
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified reads with Silva") +
+    xlab("Taxonomic level") + ylab("Classification %")
+
+```
+
+
+## GTDB CLASIFICATION
+### ASVs per sample with GTDB(mod)
+
+```{r}
+gtdb_dom_ASVs = vector()
+gtdb_phy_ASVs = vector()
+gtdb_cla_ASVs = vector()
+gtdb_ord_ASVs = vector()
+gtdb_fam_ASVs = vector()
+gtdb_gen_ASVs = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_dom_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$domain),]!=0)/sum(counts_sample!=0)*100
+  gtdb_dom_ASVs = c(gtdb_dom_ASVs, gtdb_dom_ASVs_sample)
+  
+  gtdb_phy_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$phylum),]!=0)/sum(counts_sample!=0)*100
+  gtdb_phy_ASVs = c(gtdb_phy_ASVs, gtdb_phy_ASVs_sample)
+  
+  gtdb_cla_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$class),]!=0)/sum(counts_sample!=0)*100
+  gtdb_cla_ASVs = c(gtdb_cla_ASVs, gtdb_cla_ASVs_sample)
+  
+  gtdb_ord_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$order),]!=0)/sum(counts_sample!=0)*100
+  gtdb_ord_ASVs = c(gtdb_ord_ASVs, gtdb_ord_ASVs_sample)
+  
+  gtdb_fam_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$family),]!=0)/sum(counts_sample!=0)*100
+  gtdb_fam_ASVs = c(gtdb_fam_ASVs, gtdb_fam_ASVs_sample)
+  
+  gtdb_gen_ASVs_sample= sum(counts_sample[!is.na(gtdb_mod$genus),]!=0)/sum(counts_sample!=0)*100
+  gtdb_gen_ASVs = c(gtdb_gen_ASVs, gtdb_gen_ASVs_sample)
+  
+}
+```
+
+```{r}
+gtdb_dom_ASVs <- as.data.frame(gtdb_dom_ASVs)
+gtdb_phy_ASVs <- as.data.frame(gtdb_phy_ASVs)
+gtdb_cla_ASVs <- as.data.frame(gtdb_cla_ASVs)
+gtdb_ord_ASVs <- as.data.frame(gtdb_ord_ASVs)
+gtdb_fam_ASVs <- as.data.frame(gtdb_fam_ASVs)
+gtdb_gen_ASVs <- as.data.frame(gtdb_gen_ASVs)
+
+data_ASVs_gtdb <- data.frame(gtdb_dom_ASVs, 
+                             gtdb_phy_ASVs, 
+                             gtdb_cla_ASVs, 
+                             gtdb_ord_ASVs, 
+                             gtdb_fam_ASVs,
+                             gtdb_gen_ASVs)
+
+colnames(data_ASVs_gtdb) = c("Domain", "Phylum", 
+                              "Class", "Order", 
+                              "Family", "Genus")
+
+data_boxplot <- stack(data_ASVs_gtdb)
+```
+
+```{r}
+statics_gtdb_ASV <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_ASV_df <- as.data.frame(statics_gtdb_ASV)
+row.names(statics_gtdb_ASV_df) = statics_gtdb_ASV_df[,1]
+statics_gtdb_ASV_df =  select(statics_gtdb_ASV_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_ASV_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+# Plot gtdb
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547","#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified ASVs with gtdb") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+### Reads per sample with GTDB(mod)
+```{r}
+gtdb_dom_count = vector()
+gtdb_phy_count = vector()
+gtdb_cla_count = vector()
+gtdb_ord_count = vector()
+gtdb_fam_count = vector()
+gtdb_gen_count = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_dom_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$domain)],])/sum(counts_sample))*100
+  gtdb_dom_count = c(gtdb_dom_count, gtdb_dom_count_sample)
+  
+  gtdb_phy_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$phylum)],])/sum(counts_sample))*100
+  gtdb_phy_count = c(gtdb_phy_count, gtdb_phy_count_sample)
+
+  gtdb_cla_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$class)],])/sum(counts_sample))*100
+    gtdb_cla_count = c(gtdb_cla_count, gtdb_cla_count_sample)
+
+  gtdb_ord_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$order)],])/sum(counts_sample))*100
+      gtdb_ord_count = c(gtdb_ord_count, gtdb_ord_count_sample)
+
+  gtdb_fam_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$family)],])/sum(counts_sample))*100
+        gtdb_fam_count = c(gtdb_fam_count, gtdb_fam_count_sample)
+
+  gtdb_gen_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_mod)[!is.na(gtdb_mod$genus)],])/sum(counts_sample))*100
+          gtdb_gen_count = c(gtdb_gen_count, gtdb_gen_count_sample)
+
+}
+```
+
+```{r}
+gtdb_dom_count <- as.data.frame(gtdb_dom_count)
+gtdb_phy_count <- as.data.frame(gtdb_phy_count)
+gtdb_cla_count <- as.data.frame(gtdb_cla_count)
+gtdb_ord_count <- as.data.frame(gtdb_ord_count)
+gtdb_fam_count <- as.data.frame(gtdb_fam_count)
+gtdb_gen_count <- as.data.frame(gtdb_gen_count)
+
+data <- data.frame(gtdb_dom_count, gtdb_phy_count, gtdb_cla_count, 
+                   gtdb_ord_count, gtdb_fam_count,gtdb_gen_count)
+
+colnames(data) = c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+
+data_boxplot <- stack(data)
+```
+
+
+```{r}
+statics_gtdb_read <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_read_df <- as.data.frame(statics_gtdb_read)
+row.names(statics_gtdb_read_df) = statics_gtdb_read_df[,1]
+statics_gtdb_read_df =  select(statics_gtdb_read_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_read_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+# Plot gtdb
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified reads with gtdb") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+## Sativa GTDB CLASIFICATION
+### ASVs per sample with sativa GTDB
+
+```{r}
+gtdb_sativa_dom_ASVs = vector()
+gtdb_sativa_phy_ASVs = vector()
+gtdb_sativa_cla_ASVs = vector()
+gtdb_sativa_ord_ASVs = vector()
+gtdb_sativa_fam_ASVs = vector()
+gtdb_sativa_gen_ASVs = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_dom_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$domain),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_dom_ASVs = c(gtdb_sativa_dom_ASVs, gtdb_sativa_dom_ASVs_sample)
+  
+  gtdb_sativa_phy_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$phylum),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_phy_ASVs = c(gtdb_sativa_phy_ASVs, gtdb_sativa_phy_ASVs_sample)
+  
+  gtdb_sativa_cla_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$class),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_cla_ASVs = c(gtdb_sativa_cla_ASVs, gtdb_sativa_cla_ASVs_sample)
+  
+  gtdb_sativa_ord_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$order),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_ord_ASVs = c(gtdb_sativa_ord_ASVs, gtdb_sativa_ord_ASVs_sample)
+  
+  gtdb_sativa_fam_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$family),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_fam_ASVs = c(gtdb_sativa_fam_ASVs, gtdb_sativa_fam_ASVs_sample)
+  
+  gtdb_sativa_gen_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa$genus),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_gen_ASVs = c(gtdb_sativa_gen_ASVs, gtdb_sativa_gen_ASVs_sample)
+  
+}
+```
+
+```{r}
+gtdb_sativa_dom_ASVs <- as.data.frame(gtdb_sativa_dom_ASVs)
+gtdb_sativa_phy_ASVs <- as.data.frame(gtdb_sativa_phy_ASVs)
+gtdb_sativa_cla_ASVs <- as.data.frame(gtdb_sativa_cla_ASVs)
+gtdb_sativa_ord_ASVs <- as.data.frame(gtdb_sativa_ord_ASVs)
+gtdb_sativa_fam_ASVs <- as.data.frame(gtdb_sativa_fam_ASVs)
+gtdb_sativa_gen_ASVs <- as.data.frame(gtdb_sativa_gen_ASVs)
+
+data_ASVs_gtdb_sativa <- data.frame(gtdb_sativa_dom_ASVs, 
+                             gtdb_sativa_phy_ASVs, 
+                             gtdb_sativa_cla_ASVs, 
+                             gtdb_sativa_ord_ASVs, 
+                             gtdb_sativa_fam_ASVs,
+                             gtdb_sativa_gen_ASVs)
+
+colnames(data_ASVs_gtdb_sativa) = c("Domain", "Phylum", 
+                              "Class", "Order", 
+                              "Family", "Genus")
+
+data_boxplot <- stack(data_ASVs_gtdb_sativa)
+```
+
+```{r}
+statics_gtdb_sativa_ASV <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_ASV_df <- as.data.frame(statics_gtdb_sativa_ASV)
+row.names(statics_gtdb_sativa_ASV_df) = statics_gtdb_sativa_ASV_df[,1]
+statics_gtdb_sativa_ASV_df =  select(statics_gtdb_sativa_ASV_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_ASV_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+# Plot gtdb_sativa
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified ASVs with gtdb_sativa") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+### Reads per sample with GTDB Sativa
+```{r}
+gtdb_sativa_dom_count = vector()
+gtdb_sativa_phy_count = vector()
+gtdb_sativa_cla_count = vector()
+gtdb_sativa_ord_count = vector()
+gtdb_sativa_fam_count = vector()
+gtdb_sativa_gen_count = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_dom_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$domain)],])/sum(counts_sample))*100
+  gtdb_sativa_dom_count = c(gtdb_sativa_dom_count, gtdb_sativa_dom_count_sample)
+  
+  gtdb_sativa_phy_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$phylum)],])/sum(counts_sample))*100
+  gtdb_sativa_phy_count = c(gtdb_sativa_phy_count, gtdb_sativa_phy_count_sample)
+
+  gtdb_sativa_cla_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$class)],])/sum(counts_sample))*100
+    gtdb_sativa_cla_count = c(gtdb_sativa_cla_count, gtdb_sativa_cla_count_sample)
+
+  gtdb_sativa_ord_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$order)],])/sum(counts_sample))*100
+      gtdb_sativa_ord_count = c(gtdb_sativa_ord_count, gtdb_sativa_ord_count_sample)
+
+  gtdb_sativa_fam_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$family)],])/sum(counts_sample))*100
+        gtdb_sativa_fam_count = c(gtdb_sativa_fam_count, gtdb_sativa_fam_count_sample)
+
+  gtdb_sativa_gen_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa)[!is.na(gtdb_sativa$genus)],])/sum(counts_sample))*100
+          gtdb_sativa_gen_count = c(gtdb_sativa_gen_count, gtdb_sativa_gen_count_sample)
+
+}
+```
+
+```{r}
+gtdb_sativa_dom_count <- as.data.frame(gtdb_sativa_dom_count)
+gtdb_sativa_phy_count <- as.data.frame(gtdb_sativa_phy_count)
+gtdb_sativa_cla_count <- as.data.frame(gtdb_sativa_cla_count)
+gtdb_sativa_ord_count <- as.data.frame(gtdb_sativa_ord_count)
+gtdb_sativa_fam_count <- as.data.frame(gtdb_sativa_fam_count)
+gtdb_sativa_gen_count <- as.data.frame(gtdb_sativa_gen_count)
+
+data <- data.frame(gtdb_sativa_dom_count, gtdb_sativa_phy_count, gtdb_sativa_cla_count, 
+                   gtdb_sativa_ord_count, gtdb_sativa_fam_count,gtdb_sativa_gen_count)
+
+colnames(data) = c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+
+data_boxplot <- stack(data)
+```
+
+
+```{r}
+statics_gtdb_sativa_read <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_read_df <- as.data.frame(statics_gtdb_sativa_read)
+row.names(statics_gtdb_sativa_read_df) = statics_gtdb_sativa_read_df[,1]
+statics_gtdb_sativa_read_df =  select(statics_gtdb_sativa_read_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_read_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+# Plot gtdb_sativa
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F","#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified reads with gtdb_sativa") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+## Sativa GTDB + Organelles CLASIFICATION
+### ASVs per sample with sativa GTDB  + Organelles
+
+```{r}
+gtdb_sativa_organelles_dom_ASVs = vector()
+gtdb_sativa_organelles_phy_ASVs = vector()
+gtdb_sativa_organelles_cla_ASVs = vector()
+gtdb_sativa_organelles_ord_ASVs = vector()
+gtdb_sativa_organelles_fam_ASVs = vector()
+gtdb_sativa_organelles_gen_ASVs = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_organelles_dom_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$domain),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_dom_ASVs = c(gtdb_sativa_organelles_dom_ASVs, gtdb_sativa_organelles_dom_ASVs_sample)
+  
+  gtdb_sativa_organelles_phy_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$phylum),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_phy_ASVs = c(gtdb_sativa_organelles_phy_ASVs, gtdb_sativa_organelles_phy_ASVs_sample)
+  
+  gtdb_sativa_organelles_cla_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$class),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_cla_ASVs = c(gtdb_sativa_organelles_cla_ASVs, gtdb_sativa_organelles_cla_ASVs_sample)
+  
+  gtdb_sativa_organelles_ord_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$order),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_ord_ASVs = c(gtdb_sativa_organelles_ord_ASVs, gtdb_sativa_organelles_ord_ASVs_sample)
+  
+  gtdb_sativa_organelles_fam_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$family),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_fam_ASVs = c(gtdb_sativa_organelles_fam_ASVs, gtdb_sativa_organelles_fam_ASVs_sample)
+  
+  gtdb_sativa_organelles_gen_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles$genus),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_gen_ASVs = c(gtdb_sativa_organelles_gen_ASVs, gtdb_sativa_organelles_gen_ASVs_sample)
+  
+}
+```
+
+```{r}
+gtdb_sativa_organelles_dom_ASVs <- as.data.frame(gtdb_sativa_organelles_dom_ASVs)
+gtdb_sativa_organelles_phy_ASVs <- as.data.frame(gtdb_sativa_organelles_phy_ASVs)
+gtdb_sativa_organelles_cla_ASVs <- as.data.frame(gtdb_sativa_organelles_cla_ASVs)
+gtdb_sativa_organelles_ord_ASVs <- as.data.frame(gtdb_sativa_organelles_ord_ASVs)
+gtdb_sativa_organelles_fam_ASVs <- as.data.frame(gtdb_sativa_organelles_fam_ASVs)
+gtdb_sativa_organelles_gen_ASVs <- as.data.frame(gtdb_sativa_organelles_gen_ASVs)
+
+data_ASVs_gtdb_sativa_organelles <- data.frame(gtdb_sativa_organelles_dom_ASVs, 
+                             gtdb_sativa_organelles_phy_ASVs, 
+                             gtdb_sativa_organelles_cla_ASVs, 
+                             gtdb_sativa_organelles_ord_ASVs, 
+                             gtdb_sativa_organelles_fam_ASVs,
+                             gtdb_sativa_organelles_gen_ASVs)
+
+colnames(data_ASVs_gtdb_sativa_organelles) = c("Domain", "Phylum", 
+                              "Class", "Order", 
+                              "Family", "Genus")
+
+data_boxplot <- stack(data_ASVs_gtdb_sativa_organelles)
+```
+
+```{r}
+# Plot gtdb_sativa_organelles
+statics_gtdb_sativa_organelles_ASV <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_organelles_ASV_df <- as.data.frame(statics_gtdb_sativa_organelles_ASV)
+row.names(statics_gtdb_sativa_organelles_ASV_df) = statics_gtdb_sativa_organelles_ASV_df[,1]
+statics_gtdb_sativa_organelles_ASV_df =  select(statics_gtdb_sativa_organelles_ASV_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_organelles_ASV_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified ASVs with gtdb_sativa_organelles") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+### Reads per sample with GTDB Sativa + Organelles
+```{r}
+gtdb_sativa_organelles_dom_count = vector()
+gtdb_sativa_organelles_phy_count = vector()
+gtdb_sativa_organelles_cla_count = vector()
+gtdb_sativa_organelles_ord_count = vector()
+gtdb_sativa_organelles_fam_count = vector()
+gtdb_sativa_organelles_gen_count = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_organelles_dom_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$domain)],])/sum(counts_sample))*100
+  gtdb_sativa_organelles_dom_count = c(gtdb_sativa_organelles_dom_count, gtdb_sativa_organelles_dom_count_sample)
+  
+  gtdb_sativa_organelles_phy_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$phylum)],])/sum(counts_sample))*100
+  gtdb_sativa_organelles_phy_count = c(gtdb_sativa_organelles_phy_count, gtdb_sativa_organelles_phy_count_sample)
+
+  gtdb_sativa_organelles_cla_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$class)],])/sum(counts_sample))*100
+    gtdb_sativa_organelles_cla_count = c(gtdb_sativa_organelles_cla_count, gtdb_sativa_organelles_cla_count_sample)
+
+  gtdb_sativa_organelles_ord_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$order)],])/sum(counts_sample))*100
+      gtdb_sativa_organelles_ord_count = c(gtdb_sativa_organelles_ord_count, gtdb_sativa_organelles_ord_count_sample)
+
+  gtdb_sativa_organelles_fam_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$family)],])/sum(counts_sample))*100
+        gtdb_sativa_organelles_fam_count = c(gtdb_sativa_organelles_fam_count, gtdb_sativa_organelles_fam_count_sample)
+
+  gtdb_sativa_organelles_gen_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles)[!is.na(gtdb_sativa_organelles$genus)],])/sum(counts_sample))*100
+          gtdb_sativa_organelles_gen_count = c(gtdb_sativa_organelles_gen_count, gtdb_sativa_organelles_gen_count_sample)
+
+}
+```
+
+```{r}
+gtdb_sativa_organelles_dom_count <- as.data.frame(gtdb_sativa_organelles_dom_count)
+gtdb_sativa_organelles_phy_count <- as.data.frame(gtdb_sativa_organelles_phy_count)
+gtdb_sativa_organelles_cla_count <- as.data.frame(gtdb_sativa_organelles_cla_count)
+gtdb_sativa_organelles_ord_count <- as.data.frame(gtdb_sativa_organelles_ord_count)
+gtdb_sativa_organelles_fam_count <- as.data.frame(gtdb_sativa_organelles_fam_count)
+gtdb_sativa_organelles_gen_count <- as.data.frame(gtdb_sativa_organelles_gen_count)
+
+data <- data.frame(gtdb_sativa_organelles_dom_count, gtdb_sativa_organelles_phy_count, gtdb_sativa_organelles_cla_count, 
+                   gtdb_sativa_organelles_ord_count, gtdb_sativa_organelles_fam_count,gtdb_sativa_organelles_gen_count)
+
+colnames(data) = c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+
+data_boxplot <- stack(data)
+```
+
+
+```{r}
+statics_gtdb_sativa_organelles_read <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_organelles_read_df <- as.data.frame(statics_gtdb_sativa_organelles_read)
+row.names(statics_gtdb_sativa_organelles_read_df) = statics_gtdb_sativa_organelles_read_df[,1]
+statics_gtdb_sativa_organelles_read_df =  select(statics_gtdb_sativa_organelles_read_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_organelles_read_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+# Plot gtdb_sativa_organelles
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F","#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified reads with gtdb_sativa_organelles") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+## Sativa GTDB + Organelles + Enrichment CLASIFICATION
+### ASVs per sample with sativa GTDB  + Organelles + Enrichment
+
+```{r}
+gtdb_sativa_organelles_enriched_dom_ASVs = vector()
+gtdb_sativa_organelles_enriched_phy_ASVs = vector()
+gtdb_sativa_organelles_enriched_cla_ASVs = vector()
+gtdb_sativa_organelles_enriched_ord_ASVs = vector()
+gtdb_sativa_organelles_enriched_fam_ASVs = vector()
+gtdb_sativa_organelles_enriched_gen_ASVs = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_organelles_enriched_dom_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$domain),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_dom_ASVs = c(gtdb_sativa_organelles_enriched_dom_ASVs, gtdb_sativa_organelles_enriched_dom_ASVs_sample)
+  
+  gtdb_sativa_organelles_enriched_phy_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$phylum),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_phy_ASVs = c(gtdb_sativa_organelles_enriched_phy_ASVs, gtdb_sativa_organelles_enriched_phy_ASVs_sample)
+  
+  gtdb_sativa_organelles_enriched_cla_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$class),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_cla_ASVs = c(gtdb_sativa_organelles_enriched_cla_ASVs, gtdb_sativa_organelles_enriched_cla_ASVs_sample)
+  
+  gtdb_sativa_organelles_enriched_ord_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$order),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_ord_ASVs = c(gtdb_sativa_organelles_enriched_ord_ASVs, gtdb_sativa_organelles_enriched_ord_ASVs_sample)
+  
+  gtdb_sativa_organelles_enriched_fam_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$family),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_fam_ASVs = c(gtdb_sativa_organelles_enriched_fam_ASVs, gtdb_sativa_organelles_enriched_fam_ASVs_sample)
+  
+  gtdb_sativa_organelles_enriched_gen_ASVs_sample= sum(counts_sample[!is.na(gtdb_sativa_organelles_enriched$genus),]!=0)/sum(counts_sample!=0)*100
+  gtdb_sativa_organelles_enriched_gen_ASVs = c(gtdb_sativa_organelles_enriched_gen_ASVs, gtdb_sativa_organelles_enriched_gen_ASVs_sample)
+  
+}
+```
+
+```{r}
+gtdb_sativa_organelles_enriched_dom_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_dom_ASVs)
+gtdb_sativa_organelles_enriched_phy_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_phy_ASVs)
+gtdb_sativa_organelles_enriched_cla_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_cla_ASVs)
+gtdb_sativa_organelles_enriched_ord_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_ord_ASVs)
+gtdb_sativa_organelles_enriched_fam_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_fam_ASVs)
+gtdb_sativa_organelles_enriched_gen_ASVs <- as.data.frame(gtdb_sativa_organelles_enriched_gen_ASVs)
+
+data_ASVs_gtdb_sativa_organelles_enriched <- data.frame(gtdb_sativa_organelles_enriched_dom_ASVs, 
+                             gtdb_sativa_organelles_enriched_phy_ASVs, 
+                             gtdb_sativa_organelles_enriched_cla_ASVs, 
+                             gtdb_sativa_organelles_enriched_ord_ASVs, 
+                             gtdb_sativa_organelles_enriched_fam_ASVs,
+                             gtdb_sativa_organelles_enriched_gen_ASVs)
+
+colnames(data_ASVs_gtdb_sativa_organelles_enriched) = c("Domain", "Phylum", 
+                              "Class", "Order", 
+                              "Family", "Genus")
+
+data_boxplot <- stack(data_ASVs_gtdb_sativa_organelles_enriched)
+```
+
+```{r}
+statics_gtdb_sativa_organelles_enriched_ASV <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_organelles_enriched_ASV_df <- as.data.frame(statics_gtdb_sativa_organelles_enriched_ASV)
+row.names(statics_gtdb_sativa_organelles_enriched_ASV_df) = statics_gtdb_sativa_organelles_enriched_ASV_df[,1]
+statics_gtdb_sativa_organelles_enriched_ASV_df =  select(statics_gtdb_sativa_organelles_enriched_ASV_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_organelles_enriched_ASV_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+# Plot gtdb_sativa_organelles_enriched
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F", "#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified ASVs with gtdb_sativa_organelles_enriched") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+### Reads per sample with GTDB Sativa
+```{r}
+gtdb_sativa_organelles_enriched_dom_count = vector()
+gtdb_sativa_organelles_enriched_phy_count = vector()
+gtdb_sativa_organelles_enriched_cla_count = vector()
+gtdb_sativa_organelles_enriched_ord_count = vector()
+gtdb_sativa_organelles_enriched_fam_count = vector()
+gtdb_sativa_organelles_enriched_gen_count = vector()
+
+n_samples = dim(ASVs_counts)[2]
+
+for (i in 1:n_samples) {
+  counts_sample = ASVs_counts[i]
+  
+  gtdb_sativa_organelles_enriched_dom_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$domain)],])/sum(counts_sample))*100
+  gtdb_sativa_organelles_enriched_dom_count = c(gtdb_sativa_organelles_enriched_dom_count, gtdb_sativa_organelles_enriched_dom_count_sample)
+  
+  gtdb_sativa_organelles_enriched_phy_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$phylum)],])/sum(counts_sample))*100
+  gtdb_sativa_organelles_enriched_phy_count = c(gtdb_sativa_organelles_enriched_phy_count, gtdb_sativa_organelles_enriched_phy_count_sample)
+
+  gtdb_sativa_organelles_enriched_cla_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$class)],])/sum(counts_sample))*100
+    gtdb_sativa_organelles_enriched_cla_count = c(gtdb_sativa_organelles_enriched_cla_count, gtdb_sativa_organelles_enriched_cla_count_sample)
+
+  gtdb_sativa_organelles_enriched_ord_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$order)],])/sum(counts_sample))*100
+      gtdb_sativa_organelles_enriched_ord_count = c(gtdb_sativa_organelles_enriched_ord_count, gtdb_sativa_organelles_enriched_ord_count_sample)
+
+  gtdb_sativa_organelles_enriched_fam_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$family)],])/sum(counts_sample))*100
+        gtdb_sativa_organelles_enriched_fam_count = c(gtdb_sativa_organelles_enriched_fam_count, gtdb_sativa_organelles_enriched_fam_count_sample)
+
+  gtdb_sativa_organelles_enriched_gen_count_sample=(sum(counts_sample[row.names(counts_sample) %in% row.names(gtdb_sativa_organelles_enriched)[!is.na(gtdb_sativa_organelles_enriched$genus)],])/sum(counts_sample))*100
+          gtdb_sativa_organelles_enriched_gen_count = c(gtdb_sativa_organelles_enriched_gen_count, gtdb_sativa_organelles_enriched_gen_count_sample)
+
+}
+```
+
+```{r}
+gtdb_sativa_organelles_enriched_dom_count <- as.data.frame(gtdb_sativa_organelles_enriched_dom_count)
+gtdb_sativa_organelles_enriched_phy_count <- as.data.frame(gtdb_sativa_organelles_enriched_phy_count)
+gtdb_sativa_organelles_enriched_cla_count <- as.data.frame(gtdb_sativa_organelles_enriched_cla_count)
+gtdb_sativa_organelles_enriched_ord_count <- as.data.frame(gtdb_sativa_organelles_enriched_ord_count)
+gtdb_sativa_organelles_enriched_fam_count <- as.data.frame(gtdb_sativa_organelles_enriched_fam_count)
+gtdb_sativa_organelles_enriched_gen_count <- as.data.frame(gtdb_sativa_organelles_enriched_gen_count)
+
+data <- data.frame(gtdb_sativa_organelles_enriched_dom_count, gtdb_sativa_organelles_enriched_phy_count, gtdb_sativa_organelles_enriched_cla_count, 
+                   gtdb_sativa_organelles_enriched_ord_count, gtdb_sativa_organelles_enriched_fam_count,gtdb_sativa_organelles_enriched_gen_count)
+
+colnames(data) = c("Domain", "Phylum", "Class", "Order", "Family", "Genus")
+
+data_boxplot <- stack(data)
+```
+
+
+```{r}
+statics_gtdb_sativa_organelles_enriched_read <- data_boxplot %>% group_by(data_boxplot$ind) %>% summarize(min = min(values), 
+                                                                   max = max(values),
+            mean = mean(values), q1= quantile(values, probs = 0.25), 
+            median = median(values), q3= quantile(values, probs = 0.75),
+            sd = sd(values))
+
+statics_gtdb_sativa_organelles_enriched_read_df <- as.data.frame(statics_gtdb_sativa_organelles_enriched_read)
+row.names(statics_gtdb_sativa_organelles_enriched_read_df) = statics_gtdb_sativa_organelles_enriched_read_df[,1]
+statics_gtdb_sativa_organelles_enriched_read_df =  select(statics_gtdb_sativa_organelles_enriched_read_df, -"data_boxplot$ind")
+
+
+customRed = "#CEE4F0"
+formattable(round(statics_gtdb_sativa_organelles_enriched_read_df,  digit = 1), 
+            align =c("r","r","r","r", "r", "r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 `min` = color_bar(customRed),
+                 `max` = color_bar(customRed),
+                 `mean` = color_bar(customRed),
+                 `q1` = color_bar(customRed),
+                 `median` = color_bar(customRed),
+                 `q3` = color_bar(customRed)
+                 ))
+
+
+# Plot gtdb_sativa_organelles_enriched
+data_boxplot %>%
+  ggplot(aes(x=ind, y=values, fill=ind)) + geom_boxplot() + scale_fill_manual(values = c("#26405D","#5b859e", "#336547", "#C16F5F","#B38711", "#26405D",  "#995556")) +
+    geom_jitter(color="black", size=0.2, alpha=0.5) + theme_classic() + 
+  theme(legend.position="none", plot.title = element_text(size=12), axis.title = element_text(size = 9)) +
+    ggtitle("Classified reads with gtdb_sativa_organelles_enriched") +
+    xlab("Taxonomic level") + ylab("Classification %")
+```
+
+Tabla final
+```{r}
+tabla_final <- cbind(statics_silva_ASV_df[c("mean","sd")],
+                     statics_silva_read_df[c("mean","sd")],
+                     statics_gtdb_ASV_df[c("mean","sd")],
+                     statics_gtdb_read_df[c("mean","sd")],
+                     statics_gtdb_sativa_ASV_df[c("mean","sd")],
+                     statics_gtdb_sativa_read_df[c("mean","sd")],
+                     statics_gtdb_sativa_organelles_ASV_df[c("mean","sd")],
+                     statics_gtdb_sativa_organelles_read_df[c("mean","sd")],
+                     statics_gtdb_sativa_organelles_enriched_ASV_df[c("mean","sd")],
+                     statics_gtdb_sativa_organelles_enriched_read_df[c("mean","sd")])
+colnames(tabla_final) = c("Mean ASV Silva", "Sd ASV Silva","Mean Read Silva", "Sd.Read Silva", "Mean ASV GTDB", "Sd.ASV GTDB","Mean Read GTDB", "Sd.ASV GTDB", "Mean ASV GTDB_Sativa", "Sd.ASV GTDB_Sativa","Mean read GTDB_Sativa", "Sd. ASV GTDB_Sativa", "Mean ASV GTDB_Sativa_org", "Sd.ASV GTDB_Sativa_org","Mean read GTDB_Sativa_org", "Sd.read GTDB_Sativa_org", "Mean ASV GTDB_Sativa_enrch", "Sd ASV GTDB_Sativa_enrch", "Mean read GTDB_Sativa_enrch", "Sd read GTDB_Sativa_enrch")
+
+formattable(tabla_final, 
+            align =c("r","r","r","r","r", "r","r","r","r","r","r","r","r","r","r", "r","r","r","r","r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")), 
+                 "Mean ASV Silva" = color_bar(customRed), 
+                 "Sd ASV Silva" = color_bar(customRed),
+                 "Mean Read Silva" = color_bar(customRed), 
+                 "Sd.Read Silva" = color_bar(customRed), 
+                 "Mean ASV GTDB" = color_bar(customRed), 
+                 "Sd.ASV GTDB" = color_bar(customRed),
+                 "Mean Read GTDB" = color_bar(customRed),
+                 "Sd. ASV GTDB" = color_bar(customRed), 
+                 "Mean ASV GTDB_Sativa" = color_bar(customRed),
+                 "Sd. ASV GTDB_Sativa" = color_bar(customRed),
+                 "Mean read GTDB_Sativa" = color_bar(customRed), 
+                 "Sd. ASV GTDB_Sativa" = color_bar(customRed), 
+                 "Mean ASV GTDB_Sativa_org" = color_bar(customRed),
+                 "Sd. ASV GTDB_Sativa_org" = color_bar(customRed),
+                 "Mean read GTDB_Sativa_org" = color_bar(customRed),
+                 "Sd. read GTDB_Sativa_org" = color_bar(customRed),
+                 "Mean ASV GTDB_Sativa_enrch" = color_bar(customRed), 
+                 "Sd ASV GTDB_Sativa_enrch" = color_bar(customRed), 
+                 "Mean read GTDB_Sativa_enrch" = color_bar(customRed), 
+                 "Sd. read GTDB_Sativa_enrch" = color_bar(customRed)
+                 
+                 ))
+
+```
+
+```{r}
+colnames(tabla_final) = c("Mean ASV_Silva", "Sd ASV_Silva","Mean Read_Silva", "Sd. Read_Silva", "Mean ASV_GTDB", "Sd ASV_GTDB","Mean Read_GTDB", "Sd. Read_GTDB","Mean ASV_GTDB_Sativa", "Sd ASVGTDB_Sativa","Mean ReadGTDB_Sativa", "Sd. ReadGTDB_Sativa","Mean ASVGTDB_Sativa_org", "Sd ASV_Sativa_org","Mean Read_Sativa_org", "Sd. Read_Sativa_org","Mean ASV_Sativa_enr", "Sd ASV_Sativa_enr","Mean Read_Sativa_enr", "Sd. Read_Sativa_enr")
+
+formattable(tabla_final, 
+            align =c("r","r","r","r","r", "r","r","r","r","r","r","r","r","r","r", "r","r","r","r","r"),
+            list(`Indicator Name` = formatter("span", style = ~ style(color = "grey",font.weight = "bold")),
+                 "Mean ASV_Silva"= color_bar(customRed), 
+                 "Mean Read_Silva"= color_bar(customRed),
+                 "Mean ASV_GTDB"= color_bar(customRed),
+                 "Mean Read_GTDB"= color_bar(customRed),
+                 "Mean ASV_GTDB_Sativa"= color_bar(customRed),
+                 "Mean ReadGTDB_Sativa"= color_bar(customRed),
+                 "Mean ASVGTDB_Sativa_org"= color_bar(customRed),
+                 "Mean Read_Sativa_org"= color_bar(customRed),
+                 "Mean ASV_Sativa_enr"= color_bar(customRed),
+                 "Mean Read_Sativa_enr"= color_bar(customRed)
+                 
+                 ))
+
+```
+
+

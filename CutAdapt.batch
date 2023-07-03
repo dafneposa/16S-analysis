@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --job-name=cutadapt
+#SBATCH --partition=short
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=10gb
+#SBATCH --time=1-00:00:00
+#SBATCH --output=cutadapt_Nudis_16S_ori1_DEF.log
+
+#Activate env
+module load anaconda
+source activate DD2_16S_Feb22
+
+#Input rutes
+input_dir=/storage/tbc/nudibranquios/Post-Adapt-Removal
+output_dir=/storage/tbc/nudibranquios/Post-Primer-Removal
+
+#Loop for processing samples
+for f1 in $(ls $input_dir/*_R1.fastq.gz)
+do
+	###Set name and path to pair FASTQ R2
+	base=$(basename $f1 _trimAdapt_R1.fastq.gz)
+	f2=${input_dir}/${base}_trimAdapt_R2.fastq.gz
+
+	###Output names
+	f1_qc=${output_dir}/${base}_trimAdapt_ori1_trimPrim_R1.fastq.gz
+	f2_qc=${output_dir}/${base}_trimAdapt_ori1_trimPrim_R2.fastq.gz
+
+	###Show message
+	echo "Processing sample..."
+	echo $base
+
+	###Trimm Primers
+	cutadapt -a CCTACGGGNGGCWGCAG...GGATTAGATACCCBDGTAGTC -A GACTACHVGGGTATCTAATCC...CTGCWGCCNCCCGTAGG --discard-untrimmed --overlap 10 --minimum-length 1\
+	-o $f1_qc -p $f2_qc $f1 $f2
+done
+
+echo "End Script. Bye!"

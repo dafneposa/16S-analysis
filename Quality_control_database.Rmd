@@ -1,0 +1,180 @@
+---
+title: "Quality control of database enrichment"
+subtitle: '16s sequences'
+author: "Dafne Porcel Sanchis"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+
+  pdf_document:
+    toc: true
+    toc_depth: 2
+
+---
+<div style="text-align: justify">
+
+```{r}
+######### PARAMETERS FOR MITOCHONDRIA ######### 
+# FASTA to filter
+name_path <- ""
+
+# parameters for filtering
+N_max = 0
+max_length = 2000
+min_length = 1000
+
+# name of FASTA after prefiltering
+f1_fasta_name<- ""
+
+#Profile for barrnap
+Sys.setenv(profile="mito")
+
+Sys.setenv(f1_fasta_name=f1_fasta_name)
+
+# name/path of barrnap output files
+Sys.setenv(gff_output="")
+Sys.setenv(fa_output="")
+
+# name/path of files with filterd IDs 
+Sys.setenv(finalIDs="")
+
+# path where "filterbyname.sh" is found
+Sys.setenv(filter_sh_path="")
+
+# name/path of f2 output fasta file (after barrnap)
+Sys.setenv(f2_fasta_name="")
+
+```
+
+```{r}
+######### PARAMETERS FOR CHLOROPLAST #########
+# FASTA to filter
+name_path <- ""
+
+# parameters for filtering
+N_max = 0
+max_length = 2000
+min_length = 1000
+
+# name of FASTA after prefiltering
+f1_fasta_name<- ""
+
+#Profile for barrnap
+Sys.setenv(profile="bac")
+
+Sys.setenv(f1_fasta_name=f1_fasta_name)
+
+# name/path of barrnap output files
+Sys.setenv(gff_output="")
+Sys.setenv(fa_output="")
+
+# name/path of files with filterd IDs 
+Sys.setenv(finalIDs="")
+
+# path where "filterbyname.sh" is found
+Sys.setenv(filter_sh_path="")
+
+# name/path of f2 output fasta file (after barrnap)
+Sys.setenv(f2_fasta_name="")
+
+```
+
+```{r}
+pacman::p_load("Biostrings")
+```
+
+```{r}
+# Create the DNASrtingSet
+seqs <- readDNAStringSet(name_path, format="fasta")
+
+# Number of initial sequences
+n_seqs <- length(seqs)
+```
+
+```{r}
+# sequences shorter than min_length pb and larger than max_length pb are removed
+seqs_flen <- seqs[width(seqs) >= min_length & width(seqs) <= max_length]
+n_seqs <- length(seqs_flen)
+
+# number of sequences after size filtering
+n_seqs
+```
+```{r}
+# sequences with "N" are removed
+count_N <- vmatchPattern("N", seqs_flen )
+seqs_flen_fN=seqs_flen[elementNROWS(count_N) == N_max]
+n_seqs <- length(seqs_flen_fN)
+
+# Number of sequences after removing sequences with N
+n_seqs
+```
+
+```{r}
+# check orientation
+seqs_flen_fN_orient <- DECIPHER::OrientNucleotides(seqs_flen_fN)
+
+```
+
+```{r}
+# taxas to remove
+rm <- c("bacterium","uncultured","unidentified","metagenome","environmental","clone")
+```
+
+```{r}
+# All headers in the filtered DNAStringSet
+all_names <- as.vector(names(seqs_flen_fN_orient))
+
+# headers to remove
+rm_names <- c()
+for(i in c(1:length(rm))){
+  # matching headers with patterns to remove. Those headers are added to the rm_names list.
+  extra_names <- grep (rm[i], all_names, value = TRUE, ignore.case=TRUE)
+  rm_names <- c(rm_names, extra_names)
+}
+
+# difference between all headers and the ones to remove: Headers to keep in the filtered DNAStringSet
+selected_names <- setdiff(all_names,rm_names)
+selected_names <- data.frame(name = selected_names)
+
+# definitive DNAstringSet in the prefilter
+seqs_f1 = seqs_flen_fN_orient[selected_names$name]
+
+# Number of sequences after preprocesing
+length(seqs_f1)
+```
+
+```{r}
+
+# Write filtered sequences in a fasta file
+writeXStringSet(seqs_f1, f1_fasta_name)
+
+```
+
+```{bash}
+barrnap -kingdom $profile -outseq $fa_output $f1_fasta_name > $gff_output
+```
+
+```{bash}
+
+# Remove sequences detected as partial 16S ib barrnap
+
+partialIDs="IDs_partial.txt"
+allIDs="IDs_all.txt"
+
+grep "partial" $gff_name | awk -F \t '{ print $1}' | grep -v "#" > $partialIDs
+cat $gff_name | awk -F \t '{ print $1}' | grep -v "#" > $allIDs
+
+# IDs that are not detected as partial 
+paste -d "\n" $partialIDs $allIDs | sort | uniq -u > $finalIDs
+
+rm $partialIDs
+rm $allIDs
+
+filter_sh_path=$filter_sh_path + "filterbyname.sh"
+
+$filter_sh_path in=$f1_fasta_name out=$f2_fasta_name names=$finalIDs overwrite=true include=true
+
+```
+

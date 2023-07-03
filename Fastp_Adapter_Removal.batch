@@ -1,0 +1,44 @@
+#!/bin/bash
+#SBATCH --job-name=fastp
+#SBATCH --partition=short
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16gb
+#SBATCH --time=1-00:00:00
+#SBATCH --output=fastp_Nudis_16S.log
+
+#Path to fastp
+fastp=/home/sapies/metagenomics/Fastp/v.0.23.2/fastp
+
+#Input rutes
+input_dir=/storage/tbc/nudibranquios/raw_fastqs
+output_dir=/storage/tbc/nudibranquios/Post-Adapt-Removal
+
+
+#Loop for processing samples
+for f1 in $(ls $input_dir/*_R1_001.fastq.gz)
+do
+	###Set name and path to pair FASTQ R2
+	base=$(basename $f1 _L001_R1_001.fastq.gz)
+	f2=${input_dir}/${base}_L001_R2_001.fastq.gz
+
+	###Output names
+	f1_qc=${output_dir}/${base}_trimAdapt_R1.fastq.gz
+	f2_qc=${output_dir}/${base}_trimAdapt_R2.fastq.gz
+
+	###Show message
+	echo "Processing sample..."
+	echo $base
+
+	###Trimm Adapters if found
+	$fastp \
+	--in1 $f1 --out1 $f1_qc \
+	--in2 $f2 --out2 $f2_qc \
+	--detect_adapter_for_pe \
+	--disable_quality_filtering \
+	--disable_length_filtering \
+	--json /dev/null --html /dev/null \
+	--thread 4
+done
+
+echo "End Script. Bye!"
