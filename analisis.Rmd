@@ -1,0 +1,1330 @@
+---
+title: "Nudibranchs2: Graficas Maria"
+subtitle: "Some graphics from the phyloseq object"
+author: "Dafne Porcel Sanchis"
+date: "Last modification `r format(Sys.time(), '%d %b %Y')`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 2
+---
+```{r}
+library(phyloseq)
+library(microbiome)
+library(hrbrthemes)
+library(gcookbook)
+library(tidyverse)
+library(dplyr)
+library(Biostrings)
+library(dada2)
+library(DECIPHER)
+library(phangorn)
+library(ggplot2)
+library(plotly)
+library(RColorBrewer)
+library(ComplexHeatmap)
+library(kableExtra)
+```
+
+# Load de phyloseq object
+```{r}
+load("/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/pseq_Nudibranchs_1.RData")
+```
+
+# Transform to compositional
+```{r, width = 100}
+pseq_prop = microbiome::transform(pseq_nudis2,"compositional")
+```
+
+```{r}
+# Setting colors
+color_host_family=c(Aplysiidae="#d40055ff",Aeolidiidae="#ffaaaaff",Arminidae="#00ffccff",'Babakinidae (Not nudibranch)'="#000000ff",Discodorididae="#0055d4ff",Dorididae="#d35fbcff",Dendrodorididae="#800080ff",Chromodorididae="#80b3ff",Polyceridae="#2ca02cff",Platydorididae="yellow",Facelinidae="#5b859e",Anadoridoidea="#F28E2BFF",Triophidae="darkgreen", Goniodorididae="#F1CE63FF", negative = "grey")
+
+color_host_family=c(Aplysiidae="#d40055ff",Aeolidiidae="#ffaaaaff",Arminidae="#00ffccff",'Babakinidae (Not nudibranch)'="#2ca02cff",Discodorididae="#0055d4ff",Dorididae="#d35fbcff",Dendrodorididae="#800080ff",Chromodorididae="#80b3ff",Polyceridae="#000000ff",Platydorididae="#D9E1E6",Facelinidae="#5b859e",Anadoridoidea="#F28E2BFF",Triophidae="#59A14FFF", Goniodorididae="#F1CE63FF", negative = "grey")
+
+color_host_family=c(Aplysiidae="#d40055ff",Aeolidiidae="#ffaaaaff",Arminidae="#00ffccff",Babakinidae="#2ca02cff",Discodorididae="#0055d4ff",Dorididae="#d35fbcff",Dendrodorididae="#800080ff",Chromodorididae="#80b3ff",Polyceridae="#000000ff",Platydorididae="#D9E1E6",Facelinidae="#5b859e",Anadoridoidea="#F28E2BFF",Triophidae="#59A14FFF", Goniodorididae="#F1CE63FF")
+
+color_phylum=c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "black", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#535D64", "#A6E046", "brown", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64","red")
+
+#Subset palettes
+color_sampletype_subset1=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",`reproductive organs`="#2ca02cff",
+                   negative="#000000ff")
+color_sampletype_subset2=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",
+                           slime="#d35fbcff",`slime incubation`="#800080ff")
+```
+
+```{r}
+# Doriopsilibacter composition
+
+dori_asv=subset(row.names(tax_table(pseq_prop)),tax_table(pseq_prop)[,"genus"]=="Doriopsillibacter")
+pseq_prop_dori=subset_taxa(pseq_prop, ASV %in% dori_asv)
+dori_perc=colSums(otu_table(pseq_prop_dori))*100
+#Construct data.frame
+##Check order(all trues)
+#names(dori_perc)==rownames(sample_data(pseq_prop_dori))
+
+df_dori=data.frame(fastq_name=names(dori_perc),
+                   Id=data.frame(sample_data(pseq_prop_dori))[,"Id"],
+                   sample_type=data.frame(sample_data(pseq_prop_dori))[,"SampleType"],
+                   HostGenus=data.frame(sample_data(pseq_prop_dori))[,"HostGenus"],
+                   relative_abund_perc=as.vector(dori_perc))
+df_dori
+
+
+
+tethy_asv=subset(row.names(tax_table(pseq_prop)),tax_table(pseq_prop)[,"order"]=="Tethybacterales")
+pseq_prop_tethy=subset_taxa(pseq_prop, ASV %in% tethy_asv)
+tethy_perc=colSums(otu_table(pseq_prop_tethy))*100
+#Construct data.frame
+##Check order(all trues)
+#names(dori_perc)==rownames(sample_data(pseq_prop_dori))
+
+df_tethy=data.frame(fastq_name=names(tethy_perc),
+                   Id=data.frame(sample_data(pseq_prop_tethy))[,"Id"],
+                   sample_type=data.frame(sample_data(pseq_prop_tethy))[,"SampleType"],
+                   HostGenus=data.frame(sample_data(pseq_prop_tethy))[,"HostGenus"],
+                   relative_abund_perc=as.vector(tethy_perc))
+df_tethy
+```
+
+
+# Create tables with samples
+```{r}
+kableExtra::kbl(table(sample_data(pseq_nudis1)[,c("SampleType", "Host_name")])) %>% 
+kable_styling(font_size = 10, full_width = F) %>% row_spec (1:13,font_size = 12 ) %>%  row_spec (0,font_size = 10 ) %>% column_spec(1, color = "black") %>% save_kable("/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/nudis1.pdf")
+
+kableExtra::kbl(table(sample_data(pseq_nudis2)[,c("HostGenus","SampleType")])[,c("Slime","Skin")]) %>% 
+kable_styling(font_size = 10, full_width = F) %>% row_spec (1:20,font_size = 18 ) %>%  row_spec (0,font_size = 18) %>% column_spec(1, color = "black") %>% save_kable("/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea1/nudis2.pdf")
+
+
+kableExtra::kbl(table(sample_data(pseq_nudis2)[,c("HostSpecies","SampleType")])[,c("Slime","Skin")]) %>% 
+kable_styling(font_size = 10, full_width = F) %>% row_spec (1:13,font_size = 12 ) %>%  row_spec (0,font_size = 10 ) %>% column_spec(1, color = "black") 
+
+```
+
+# Top ASVs unclassified at order level in skin samples #
+
+# Phyloseq subset with skin samples
+```{r}
+slime <- c(paste("Slime0", 1:9, sep = ""), paste("Slime", 10:20, sep = ""))
+skin <- c(paste("Skin0", 1:9, sep = ""), paste("Skin", 10:20, sep = ""))
+`%not_in%` <- purrr::negate(`%in%`)
+
+pseq_nudis2_skin  <- subset_samples(pseq_nudis2, Id %not_in% slime)
+pseq_nudis2_skin_prop <- microbiome::transform(pseq_nudis2_skin,"compositional")
+
+
+pseq_nudis2_skin_prop_top_taxa <- tax_glom(pseq_nudis2_skin_prop, "genus", NArm=FALSE)
+top_taxa_skin <- microbiome::top_taxa(pseq_nudis2_skin_prop_top_taxa, 20)
+top_family_skin <- tax_table(pseq_nudis2_skin_prop_top_taxa)[top_taxa_skin][,"genus"]
+
+pseq_skin_top_family_prop <- subset_taxa(pseq_nudis2_skin_prop_top_taxa, genus %in% top_family_skin)
+mean(colSums(otu_table(pseq_skin_top_family_prop)))
+
+pseq_skin_top_family_prop <- subset_taxa(pseq_nudis2_skin_prop_top_taxa, is.na(class))
+mean(colSums(otu_table(pseq_skin_top_family_prop)))
+```
+
+```{r}
+# Unclassified ASVs at order level (Skin) 
+
+# Vamos a calcular el valor de Shannon (alpha diversity)
+# Filtering taxa which is not present in any sample
+pseq_nudis2_skin_f <- prune_taxa(taxa_sums(pseq_nudis2_skin) > 0, pseq_nudis2_skin)
+pseq_nudis2_skin_prop_f <- prune_taxa(taxa_sums(pseq_nudis2_skin_prop) > 0, pseq_nudis2_skin_prop)
+
+# calculate Shannon index using microbiome package (Not in proportions!!!)
+data_shannon <- microbiome::alpha(pseq_nudis2_skin_f, index = "shannon")
+sample_data(pseq_nudis2_skin_f) <- cbind(sample_data(pseq_nudis2_skin_f), data_shannon)
+sample_data(pseq_nudis2_skin_prop_f) <- cbind(sample_data(pseq_nudis2_skin_prop_f), data_shannon)
+
+# calculate Simpson index using vegan package (Not in proportions!!!)
+data_simpson <- microbiome::alpha(pseq_nudis2_skin_f, index = "simpson")
+sample_data(pseq_nudis2_skin_f) <- cbind(sample_data(pseq_nudis2_skin_f), data_simpson)
+sample_data(pseq_nudis2_skin_prop_f) <- cbind(sample_data(pseq_nudis2_skin_prop_f), data_simpson)
+
+# ASVs not classified at Order level
+na_asv=subset(row.names(tax_table(pseq_nudis2_skin_prop_f)),is.na(tax_table(pseq_nudis2_skin_prop_f)[,"order"]))
+pseq_prop_na=subset_taxa(pseq_nudis2_skin_prop_f, ASV %in% na_asv)
+
+# Phyloseq with most abundant unclassified ASVs. From the phyloseq object formed of unknown ASVs 
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.33))
+pseq_prop_na_fs=filter_taxa(pseq_prop_na,filter_func,TRUE)
+pseq_prop_na_fs_taxa=row.names(tax_table(pseq_prop_na_fs))
+pseq_prop_na_most_abundant = phyloseq::prune_taxa(pseq_prop_na_fs_taxa, pseq_nudis2_skin_prop_f)
+
+# Phyloseq with other unknown ASVs
+other_na  <- na_asv[na_asv %not_in% pseq_prop_na_fs_taxa]
+pseq_prop_other=subset_taxa(pseq_nudis2_skin_prop_f, ASV %in% other_na)
+
+# known ASVs
+classified  <- row.names(tax_table(pseq_prop))[row.names(tax_table(pseq_prop)) %not_in% na_asv]
+pseq_prop_classified=subset_taxa(pseq_nudis2_skin_prop_f, ASV %in% classified)
+
+other <-  as.data.frame(colSums(otu_table(pseq_prop_other))*100)
+classified <- as.data.frame(colSums(otu_table(pseq_prop_classified))*100)
+most_abundant_na <- t(as.data.frame(otu_table(pseq_prop_na_most_abundant)*100))
+
+#plot_richness(pseq_nudis2_skin_f, measures = c("Observed", "Chao1", "Shannon", "ACE", "Simpson"))
+
+a <- cbind(classified,most_abundant_na, other, data_shannon, data_simpson)
+names_samples = sapply(strsplit(row.names(most_abundant_na),"-16S-"),`[`,1)
+species = sample_data(pseq_nudis2_skin_f)[,c("HostSpecies", "Id", "HostGenus")]
+species_order <- cbind(species, a)
+
+a <- cbind(names_samples, a)
+
+colnames(a) = c("Sample","Classified",colnames(most_abundant_na), "Other", "data_shannon", "data_simpson")
+#a$Sample[a$Sample%in%c("DARED04S_S71_L001", "PARGO05S_S72_L001")] <- c("Dared04S", "Pargo05S")
+order_vector_shannon <- a[order(a$data_shannon), ]$Sample
+order_vector_simpson <- a[order(a$data_simpson), ]$Sample
+
+species_order_names <- paste(species_order[order(species_order$data_shannon),]$HostGenus, species_order[order(species_order$data_shannon), ]$HostSpecie, sep = " | ")
+
+pacman::p_load(reshape)
+b <- melt(a[,1:25], id = "Sample")
+```
+
+# Percentaje of unclassified reads by nudibranch specie
+```{r}
+unknown <- cbind(most_abundant_na, other)
+mean(rowSums(unknown))
+min(unknown)
+max(unknown)
+
+pseq_by_genus <- merge_samples(pseq_nudis2_skin_f, "HostSpecies")
+pseq_by_genus = microbiome::transform(pseq_by_genus,"compositional")
+sample_data(pseq_by_genus)[,"Genus"] = rownames(sample_data(pseq_by_genus))
+
+# ASVs not classified at Order level
+na_asv=subset(row.names(tax_table(pseq_by_genus)),is.na(tax_table(pseq_by_genus)[,"order"]))
+pseq_prop_na=subset_taxa(pseq_by_genus, ASV %in% na_asv)
+
+
+unclassified <-  as.data.frame(rowSums(otu_table(pseq_prop_na))*100)
+unclassified$classified <- 100-rowSums(unclassified)
+unclassified <- unclassified[,c(2,1)]
+
+
+a <- unclassified
+a$sample_names <- rownames(a)
+colnames(a) = c("Classified","Unlassified","Genus")
+
+
+order_vector <- a[order(a$Classified), ]$Genus
+pacman::p_load(reshape)
+b <- melt(a)
+```
+
+
+```{r}
+# Plot ordenado por el indice de Shannon
+a_plot <- ggplot(data = b, aes(x=factor(Genus,levels = order_vector), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e")) + theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 10)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "Species") + ylab(label = "Proportion of reads(%)") + theme(legend.key.size = unit(0.5, 'cm'), #change legend key size
+        legend.key.height = unit(0.5, 'cm'), #change legend key height
+        legend.key.width = unit(0.5, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=10)) #change legend text font size
+
+
+#pdf("unknown_bacteria_order.pdf", width =12, height =7) 
+#a_plot
+#dev.off()
+
+#pdf("unknown_bacteria_order.png", width =12, height =7) 
+#dev.off()
+#ggsave(a_plot,file="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/Unknown_total.svg",height = 7, width = 12)
+```
+
+
+```{r}
+# Plot ordenado por el indice de Shannon
+  a_plot <- ggplot(data = b, aes(x=factor(Sample, levels = order_vector_shannon), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "#59A14FFF", "#F28E2BFF", "#F28E2BFF", "#D37295FF", "#336547", "#A9B5AEFF","#5b859e","#B15232","#59A14FFF", "#5C5AD7", "#A6E046", "brown", "#F28E2BFF", "#F28E2BFF", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64")) + theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 10, hjust=0.95,vjust=0.2)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "Samples") + ylab(label = "Proportion of reads(%)") + theme(legend.key.size = unit(0.5, 'cm'), #change legend key size
+        legend.key.height = unit(0.5, 'cm'), #change legend key height
+        legend.key.width = unit(0.5, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=10)) #change legend text font size
+
+a_plot <- a_plot + scale_x_discrete(labels=species_order_names)
+
+
+#pdf("unknown_bacteria_order.pdf", width =12, height =7) 
+a_plot
+#dev.off()
+
+#pdf("unknown_bacteria_order.png", width =12, height =7) 
+#dev.off()
+ggsave(a_plot,file="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/Unknown_total_cluster.png",height = 7, width = 12)
+```
+
+
+```{r}
+# Plot ordenado por el indice de Simpson
+ggplot(data = b, aes(x=factor(Sample, levels = order_vector_simpson), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#A6E046", "brown", "red", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64")) + theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 8)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "Samples") + ylab(label = "Proportion of reads(%)") + theme(legend.key.size = unit(0.5, 'cm'), #change legend key size
+        legend.key.height = unit(0.5, 'cm'), #change legend key height
+        legend.key.width = unit(0.5, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=7)) #change legend text font size
+```
+
+```{r}
+# Otro order_vector, por el porcentaje de la ASV con mayor proporcion
+a_max <- a
+a_max$max <- apply(a[,3:24], 1, max, na.rm=TRUE)
+order_vector_max <- a_max[order(a_max$max, decreasing = TRUE), ]$Sample
+
+pacman::p_load(reshape)
+b <- melt(a_max[,1:25], id = "Sample")
+
+ggplot(data = b, aes(x=factor(Sample, levels = order_vector_max), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#A6E046", "brown", "red", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64")) + theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 8)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "Samples") + ylab(label = "Proportion of reads(%)") + theme(legend.key.size = unit(0.5, 'cm'), #change legend key size
+        legend.key.height = unit(0.5, 'cm'), #change legend key height
+        legend.key.width = unit(0.5, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=7)) #change legend text font size
+```
+
+```{r}
+# PCA dorid vs aeolid
+#Filter 0.01
+##Get list with ASVs with relative abundance > 0.01 in at least two of the samples
+filter_func=genefilter::filterfun(genefilter::kOverA(2,0.01))
+pseq_nudis2_skin_prop_fs=filter_taxa(pseq_nudis2_skin_prop,filter_func,TRUE)
+pseq_nudis2_skin_prop_fs_taxa=row.names(tax_table(pseq_nudis2_skin_prop_fs))
+pseq_nudis2_skin_prop_fs_low=prune_taxa(pseq_nudis2_skin_prop_fs_taxa,pseq_nudis2_skin)
+pseq_nudis2_skin_prop_fs_low<-prune_taxa(taxa_sums(pseq_nudis2_skin_prop_fs_low)>0,pseq_nudis2_skin_prop_fs_low)
+pseq_nudis2_skin_prop_fs_low
+
+factor((sample_data(pseq_nudis2_skin_prop_fs_low)$HostFamily))
+
+##Transform to clr
+pseq_clr <- microbiome::transform(pseq_nudis2_skin_prop_fs_low,"clr")
+sample_data(pseq_clr)[,"HostFamily"][sample_data(pseq_clr)[,"HostFamily"] == "Babakinidae"] = "Babakinidae (Not nudibranch)"
+sample_data(pseq_clr)[,"HostFamily"][is.na(sample_data(pseq_clr)[,"HostFamily"])] = "negative"
+```
+
+```{r}
+#PCA (RDA with out constrictions is equivalent to PCA) 
+ord_pca <- phyloseq::ordinate(pseq_clr, method="RDA", distance = "euclidean")
+
+#We see the variation of variance explained by the components(first 5 components)
+sapply(ord_pca$CA$eig[1:5], function(x) x / sum(ord_pca$CA$eig))
+
+#Get plot
+pcs_plot <- phyloseq::plot_scree(ord_pca) + geom_bar(stat="identity", fill = "blue") +labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+#Print plot
+print(pcs_plot)
+```
+
+```{r}
+clr1 <- ord_pca$CA$eig[1] / sum(ord_pca$CA$eig)
+clr2 <- ord_pca$CA$eig[2] / sum(ord_pca$CA$eig)
+
+#Set Axis labels
+F_PC1 <- paste("PC1","[",round(clr1*100,digits = 2),"% ]")
+F_PC2 <- paste("PC2","[",round(clr2*100,digits = 2),"% ]")
+
+#Get 2D-PCA by SampleType
+##Get initial plot and scale axes
+pca1 = phyloseq::plot_ordination(pseq_clr, ord_pca, type="samples", color="HostFamily", title = "PCA ordination") + coord_fixed(clr2 / clr1)
+
+##Modify axis and legend labels
+pca1 <- pca1 + labs(x=F_PC1,y=F_PC2,color='Groups') 
+
+##Change theme and adjust parameters
+pca1 <- pca1 + theme_bw()+theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20),legend.title=element_text(size=15),legend.text=element_text(size=10))
+##Change axis scale color
+pca1 <-pca1 +theme(axis.text.y = element_text(colour = 'black', size = 10),axis.text.x = element_text(colour = 'black', size = 10))
+##Change point style
+pca1=pca1 + geom_point(size=3, alpha=0.75)
+#Use manually set colors
+pca1=pca1 + scale_fill_discrete(labels=c("Aeolidiidae", "Anadoridoidea", "Aplysiidae", "Arminidae", "Babakinidae (Not nudibranch)", "Chromodorididae", "Dendrodorididae", "Discodorididae", "Dorididae", "Facelinidae","Goniodorididae", "Platydorididae", "Polyceridae","Triophidae", NA)) + scale_colour_manual(values = color_host_family)
+
+##Show graph result
+print(pca1)
+
+ggsave(pca1, filename ="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/pca.svg", height = 7 , width = 12 )
+```
+
+```{r}
+#Get PCA components with scores for taxa
+pca_scores=vegan::scores(ord_pca, choices=c(1,2,3),display=c("species"))
+#Let's get top 50 ASV for each PCA components
+##Top scores DF for PC1
+top50=names(rev(sort(abs(pca_scores[,"PC1"]))))[1:50]
+pc_tax=pca_scores[top50,"PC1"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc1_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc1_taxa_df_meta=merge(pc1_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc1_taxa_df_meta$full_tax=paste(pc1_taxa_df_meta$Taxa,pc1_taxa_df_meta$domain,pc1_taxa_df_meta$phylum,pc1_taxa_df_meta$class,pc1_taxa_df_meta$order, pc1_taxa_df_meta$family,pc1_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC2
+top50=names(rev(sort(abs(pca_scores[,"PC2"]))))[1:50]
+pc_tax=pca_scores[top50,"PC2"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc2_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc2_taxa_df_meta=merge(pc2_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc2_taxa_df_meta$full_tax=paste(pc2_taxa_df_meta$Taxa,pc2_taxa_df_meta$domain,pc2_taxa_df_meta$phylum,pc2_taxa_df_meta$class,pc2_taxa_df_meta$order, pc2_taxa_df_meta$family,pc2_taxa_df_meta$genus,sep =" | ")
+##Top scores for PC3
+top50=names(rev(sort(abs(pca_scores[,"PC3"]))))[1:50]
+pc_tax=pca_scores[top50,"PC3"]
+Taxa=names(pc_tax)
+Values=pc_tax
+Values_positive=Values>0
+pc3_taxa_df=data.frame(Taxa,Values,Values_positive)
+pc3_taxa_df_meta=merge(pc3_taxa_df,data.frame(tax_table(pseq_clr)),by.x="Taxa",by.y="ASV")
+pc3_taxa_df_meta$full_tax=paste(pc3_taxa_df_meta$Taxa,pc3_taxa_df_meta$domain,pc3_taxa_df_meta$phylum,pc3_taxa_df_meta$class,pc3_taxa_df_meta$order, pc3_taxa_df_meta$family,pc3_taxa_df_meta$genus,sep =" | ")
+#Unify color legends
+leyend_uniq_tax=unique(c(pc1_taxa_df_meta$family,pc2_taxa_df_meta$family,pc3_taxa_df_meta$family))
+pc_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax))
+names(pc_colors)=leyend_uniq_tax
+#Filter palette for each PCA component
+pc1_colors=pc_colors[names(pc_colors) %in% unique(pc1_taxa_df_meta$family)]
+pc2_colors=pc_colors[names(pc_colors) %in% unique(pc2_taxa_df_meta$family)]
+pc3_colors=pc_colors[names(pc_colors) %in% unique(pc3_taxa_df_meta$family)]
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC1
+pc1_plot=ggplot(data = pc1_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc1_plot=pc1_plot + coord_flip()
+pc1_plot=pc1_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc1_plot=pc1_plot + labs(x="",y=F_PC1)+theme(panel.border = element_rect(fill = NA))
+pc1_plot=pc1_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc1_plot=pc1_plot + scale_x_discrete(position = "top")
+pc1_plot=pc1_plot + scale_fill_manual(values = pc1_colors)
+pc1_plot=pc1_plot + labs(fill='Tax Level: Family')
+pc1_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC2
+pc2_plot=ggplot(data = pc2_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc2_plot=pc2_plot + coord_flip()
+pc2_plot=pc2_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc2_plot=pc2_plot + labs(x="",y=F_PC2)+theme(panel.border = element_rect(fill = NA))
+pc2_plot=pc2_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc2_plot=pc2_plot + scale_x_discrete(position = "top")
+pc2_plot=pc2_plot + scale_fill_manual(values = pc2_colors)
+pc2_plot=pc2_plot + labs(fill='Tax Level: Family')
+pc2_plot
+```
+
+```{r,fig.height = 10, fig.width = 17}
+#Plot TOP 50 in PC3
+pc3_plot=ggplot(data = pc3_taxa_df_meta, aes(x=reorder(full_tax,Values),y=Values,fill=family))+geom_bar(stat = "identity")
+pc3_plot=pc3_plot + coord_flip()
+pc3_plot=pc3_plot + theme(axis.text.y = element_text(color="black",size = 12))
+pc3_plot=pc3_plot + labs(x="",y=F_PC3)+theme(panel.border = element_rect(fill = NA))
+pc3_plot=pc3_plot + theme(axis.title.y = element_text(size=20),axis.title.x = element_text(size=20))
+pc3_plot=pc3_plot + scale_x_discrete(position = "top")
+pc3_plot=pc3_plot + scale_fill_manual(values = pc3_colors)
+pc3_plot=pc3_plot + labs(fill='Tax Level: Family')
+pc3_plot
+```
+
+```{r,eval=FALSE}
+#Save plots
+ggsave(plot = pc1_plot, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc1_scores.svg",height = 10, width = 16)
+ggsave(plot = pc2_plot, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc2_scores.svg",height = 10, width = 16)
+ggsave(plot = pc3_plot, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc3_scores.svg",height = 10, width = 16)
+
+#Save tables
+write.table(subset(pc1_taxa_df_meta, select = - full_tax),file="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc1_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc2_taxa_df_meta, select = - full_tax),file="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc2_scores.tsv",sep = "\t",row.names = F)
+write.table(subset(pc3_taxa_df_meta, select = - full_tax),file="/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/tarea3/pca/pc3_scores.tsv",sep = "\t",row.names = F)
+```
+
+
+```{r}
+# Phyloseq object with Marta Pola samples (skin vs slime)
+skin <- c(paste("Skin0", 1:9, sep = ""), paste("Skin", 10:20, sep = ""))
+slime <- c(paste("Slime0", 1:9, sep = ""), paste("Slime", 10:20, sep = ""))
+slime_skin <- c(skin,slime)
+`%not_in%` <- purrr::negate(`%in%`)
+
+pseq_nudis2_Marta  <- subset_samples(pseq_nudis2, Id %in% slime_skin)
+pseq_nudis2_Marta_prop <- microbiome::transform(pseq_nudis2_Marta,"compositional")
+```
+
+# Skin vs slime plot
+```{r}
+#Subset of the unclassified ASVs at order level
+na_asv=subset(row.names(tax_table(pseq_nudis2_Marta_prop)),is.na(tax_table(pseq_nudis2_Marta_prop)[,"order"]))
+pseq_prop_na=subset_taxa(pseq_nudis2_Marta_prop, ASV %in% na_asv)
+
+pacman::p_load("genefilter")
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.33))
+pseq_prop_na_fs=filter_taxa(pseq_prop_na,filter_func,TRUE)
+pseq_prop_na_fs_taxa=row.names(tax_table(pseq_prop_na_fs))
+
+
+pseq_prop_na_most_abundant = phyloseq::prune_taxa(pseq_prop_na_fs_taxa, pseq_nudis2_Marta_prop)
+
+# other unknown ASVs
+other_na  <- na_asv[na_asv %not_in% pseq_prop_na_fs_taxa]
+pseq_prop_other=subset_taxa(pseq_nudis2_Marta_prop, ASV %in% other_na)
+
+# known ASVs
+classified  <- row.names(tax_table(pseq_nudis2_Marta_prop))[row.names(tax_table(pseq_nudis2_Marta_prop)) %not_in% na_asv]
+pseq_prop_classified=subset_taxa(pseq_nudis2_Marta_prop, ASV %in% classified)
+
+other <-  as.data.frame(colSums(otu_table(pseq_prop_other))*100)
+classified <- as.data.frame(colSums(otu_table(pseq_prop_classified))*100)
+most_abundant_na <- t(as.data.frame(otu_table(pseq_prop_na_most_abundant)*100))
+suma_top_taxa <- as.data.frame(colSums(otu_table(pseq_prop_na_most_abundant))*100)
+
+marta_samples <- cbind(classified,most_abundant_na, other)
+
+names_samples = sapply(strsplit(row.names(most_abundant_na),"-16S-"),`[`,1)
+marta_samples <- cbind(names_samples, marta_samples)
+colnames(marta_samples) = c("Sample","Classified",colnames(most_abundant_na), "Other")
+
+pacman::p_load(reshape)
+marta_samples_reshape <- melt(marta_samples, id = "Sample")
+marta_samples_reshape$SampleType <- sub("[0-9][0-9]", "", marta_samples_reshape$Sample)
+
+marta_samples_reshape_skin <- marta_samples_reshape[marta_samples_reshape$SampleType == "Skin",]
+marta_samples_reshape_slime <- marta_samples_reshape[marta_samples_reshape$SampleType == "Slime",]
+
+skin_plot <- ggplot(data = marta_samples_reshape_skin, aes(x=factor(Sample), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "black", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#535D64", "#A6E046", "brown", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64","red"))+ coord_flip() + theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 10)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "Samples") + ylab(label = "") + theme(legend.key.size = unit(0.5, 'cm'),#change legend key size
+        legend.key.height = unit(0.6, 'cm'), #change legend key height
+        legend.key.width = unit(0.6, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=9)) #change legend text font size
+
+slime_plot <- ggplot(data = marta_samples_reshape_slime, aes(x=factor(Sample), y=value, fill = variable)) + geom_bar(stat='identity') + scale_fill_manual(values = c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "black", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#535D64","#A6E046", "brown", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64","red")) + coord_flip()+ theme_classic() + theme(axis.text.x = element_text(angle = 90, size = 10)) + scale_y_continuous(expand = c(0,0)) + xlab(label = "") + ylab(label ="") + theme(legend.key.size = unit(0.5, 'cm'), #change legend key size
+        legend.key.height = unit(0.6, 'cm'), #change legend key height
+        legend.key.width = unit(0.6, 'cm'), #change legend key width
+        legend.title = element_blank(), #change legend title font size
+        legend.text = element_text(size=9)) #change legend text font size
+
+slime_plot <- ggpubr::ggarrange(skin_plot, slime_plot, common.legend = TRUE, legend = "right",
+            labels = c("A", "B"),
+            ncol = 2)
+ggsave(plot = slime_plot, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/skin_slime.svg", height = 7, width =12)
+```
+
+```{r}
+# Clustering
+# Using the filtered phyloseq, not in compositional
+#Filter 0.0001
+##Get list with ASVs with relative abundance > 0.01 in at least one of the samples
+
+filter_func=genefilter::filterfun(genefilter::kOverA(6,0.0001))
+pseq_prop_skin_filtered=filter_taxa(pseq_nudis2_skin_prop, filter_func,TRUE)
+pseq_prop_skin_filtered_taxa=row.names(tax_table(pseq_prop_skin_filtered))
+pseq_prop_skin_filtered
+
+##Transform to clr
+pseq_clr <- microbiome::transform(pseq_prop_skin_filtered,"clr")
+sample_names(pseq_clr) <- sample_data(pseq_clr)$Id
+pseq_clr
+
+#Get Aitchison Distance
+clr_matrix=t(data.frame(otu_table(pseq_clr)))
+clr_eucl_dist=dist(clr_matrix, method = "euclidean")
+
+#Get dendrogram
+dendrogram=as.dendrogram(hclust(clr_eucl_dist,method = "ward.D2"))
+pacman::p_load("dendextend")
+
+(sample_data(pseq_prop_skin_filtered)[,"HostFamily"])[order.dendrogram(dendrogram)]
+labels(dendrogram) <- as.vector((sample_data(pseq_prop_skin_filtered)[,"HostFamily"])[order.dendrogram(dendrogram)])$HostFamily
+
+#Give color codes
+meta <- data.frame(phyloseq::sample_data(pseq_clr))
+
+dendextend::labels_colors(dendrogram) <- color_host_family[meta$HostFamily][order.dendrogram(dendrogram)]
+#Add color groups
+par(cex=0.55)
+plot(dendrogram,horiz =F)
+```
+
+```{r,eval=FALSE}
+#Save the plot
+svg("../results/Clustering/clustering_Aitchison_wardD2.svg",height=10,width = 15)
+par(cex=0.55)
+plot(dendrogram,horiz =F, hang = -1)
+dev.off()
+```
+
+# Skin Core
+```{r}
+# Physeq: skin, filtered >0, proportion
+#Will set a prevalence threshold of 100% in all samples. Let's try different abundance thresholds:
+#Set thresholds
+PREV=0.33
+ABUND=0.0001
+##Get Core  phylosep object
+pseq_nudis2_skin_core <- core(pseq_nudis2_skin_prop_f, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core
+
+```
+It seems there is not a clear core in the 65 nudibranch samples. 
+
+Let's check if there is some core in different families. 
+```{r}
+# Skin core for every family
+#families <- c(NA, "Aplysiidae", "Aeolidiidae", "Arminidae", "Babakinidae", "Discodorididae ", "Dorididae", "Dendrodorididae", "Chromodorididae ", "Polyceridae", "Platydorididae ", "Facelinidae", "Anadoridoidea", " Anadoridoidea", " Chromodorididae", "Triophidae", "Chromodorididae", "Goniodorididae")
+
+PREV=0.33
+ABUND=0.0001
+
+pseq_nudis2_skin_Aplysiidae <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostDorid.Aeolid"]=="dorid" )
+
+pseq_nudis2_skin_core_Aplysiidae <- core(pseq_nudis2_skin_prop_f, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Aplysiidae
+```
+
+Let's check if there is some core within dorid/aeolid nudibranchs. 
+```{r}
+PREV=0.5
+ABUND=0.00001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Felimida" )
+
+pseq_nudis2_skin_core_Aplysiidae <- core(pseq_nudis2_skin_prop_f, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Aplysiidae
+```
+Let's check if there is some core within dorid/aeolid nudibranchs. 
+
+```{r}
+# Genus with more than 3 samples
+genus <- c("Dendrodoris","Doris","Felimare","Felimida", "Polycera", "Trapania")
+```
+
+```{r}
+# Dendrodoris
+PREV=0.6 # 4 samples
+ABUND=0.0001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Dendrodoris" )
+
+pseq_nudis2_skin_core_Dendrodoris <- core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Dendrodoris
+```
+With a prevalence of 1 (5/5 samples) and 0.01% abundance we find ASV_70 (Gammaproteobacteria) and  ASV_125 (Gammaproteobacteria). 
+With a prevalence of 0.8 (4/5 samples) and 0.1% abundance we find ASV_70 (Gammaproteobacteria). 
+With a prevalence of 0.6 (3/5 samples) and 0.1% abundance we find ASV_70 (Gammaproteobacteria), ASV_97(Gammaproteobacteria), ASV_750(Gammaproteobacteria) and ASV_852(Gammaproteobacteria).
+With a prevalence of 0.6 (3/5 samples) and 0.01% abundance we find ASV_70 (Gammaproteobacteria), ASV_71(Gammaproteobacteria), ASV_97(Gammaproteobacteria), ASV_125(Firmicutes, Bacilli), ASV_750(Gammaproteobacteria), ASV_852(Gammaproteobacteria), ASV_1122(Unknown) and ASV_3394(Gammaproteobacteria). 
+
+Let's make a heatmap show the prevalences of these 14 ASVs (PREV=0.6 and ABUN=0.0001) depending of different abundance thresholds:    
+```{r}
+##Set parameters
+prevalences <- seq(.05, 1, .05)
+detections <- c(0.01, 0.1, 0.5, 1,5, 10)/100
+color=rev(RColorBrewer::brewer.pal(9, "Spectral"))
+
+##Initial Plot to get data
+p_core <- plot_core(pseq_nudis2_skin_core_Dendrodoris, plot.type = "heatmap", colours = color,
+    prevalences = prevalences, detections = detections)
+#Get input format
+input_data=reshape2::acast(p_core$data,Taxa~DetectionThreshold,value.var = "Prevalence")
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data=input_data[names(taxa_avg_abund(pseq_nudis2_skin_core_Dendrodoris)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Dendrodoris))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Dendrodoris)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Dendrodoris)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Dendrodoris)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data)=new_rownames
+
+color_cor=rev(RColorBrewer::brewer.pal(n = 10, name = "Spectral"))
+color_cor=RColorBrewer::brewer.pal(n = 10, name = "Greens")
+
+##Get initial heatmap
+htA1<-ComplexHeatmap::Heatmap(input_data, heatmap_legend_param=list(title="Prevalence",at=c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)),
+                              show_column_names = TRUE, row_order = rownames(input_data), column_order = colnames(input_data),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 1),
+                              col = color_cor,rect_gp = grid::gpar(col = "black", lwd = 2))
+
+##ajust legend and convert to ggplot
+gb_htA1=grid::grid.grabExpr(draw(htA1, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA1=ggpubr::as_ggplot(gb_htA1)
+gb_htA1
+```
+
+```{r}
+# Doris
+PREV=0.75 # 4 samples
+ABUND=0.001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Doris" )
+
+pseq_nudis2_skin_core_Doris <- core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+tax_table(pseq_nudis2_skin_core_Doris)
+```
+With a prevalence of 0.75 (3/4 samples) and 0.01% abundance we find as an unknown ASV: ASV_125 (Gammaproteobacteria). Other ASVs are found within the Vibrio genus or Cutibacterium. 
+
+Let's make a heatmap show the prevalences of these 14 ASVs (PREV=0.6 and ABUN=0.0001) depending of different abundance thresholds:    
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Doris)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Doris)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Doris))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Doris)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Doris)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Doris)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 4, name = "Oranges")[2:4],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_Doris.svg", height = 8, width =10)
+```
+
+```{r}
+# Felimare
+PREV=0.5 # 3 samples
+ABUND=0.0001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Felimare" )
+
+pseq_nudis2_skin_core_Felimare <- core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Felimare
+tax_table(pseq_nudis2_skin_core_Felimare)
+```
+Let's make a heatmap show the prevalences of these 17 ASVs (PREV=0.5 and ABUN=0.0001) depending of different abundance thresholds:    
+```{r}
+##Set parameters
+prevalences <- seq(.05, 1, .05)
+detections <- c(0.01, 0.1, 0.5, 1,5, 10)/100
+color=rev(RColorBrewer::brewer.pal(9, "Spectral"))
+
+##Initial Plot to get data
+p_core <- plot_core(pseq_nudis2_skin_core_Felimare, plot.type = "heatmap", colours = color,
+    prevalences = prevalences, detections = detections)
+#Get input format
+input_data=reshape2::acast(p_core$data,Taxa~DetectionThreshold,value.var = "Prevalence")
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data=input_data[names(taxa_avg_abund(pseq_nudis2_skin_core_Felimare)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Felimare))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Felimare)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Felimare)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Felimare)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data)=new_rownames
+
+color_cor=rev(RColorBrewer::brewer.pal(n = 10, name = "Spectral"))
+color_cor=RColorBrewer::brewer.pal(n = 10, name = "Greens")
+
+##Get initial heatmap
+htA1<-ComplexHeatmap::Heatmap(input_data, heatmap_legend_param=list(title="Prevalence",at=c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)),
+                              show_column_names = TRUE, row_order = rownames(input_data), column_order = colnames(input_data),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 1),
+                              col = color_cor,rect_gp = grid::gpar(col = "black", lwd = 2))
+
+##ajust legend and convert to ggplot
+gb_htA1=grid::grid.grabExpr(draw(htA1, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA1=ggpubr::as_ggplot(gb_htA1)
+gb_htA1
+```
+
+```{r}
+# Felimida
+PREV=0.5 # 6 samples
+ABUND=0.0001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Felimida" )
+
+pseq_nudis2_skin_core_Felimida <- microbiome::core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Felimida
+tax_table(pseq_nudis2_skin_core_Felimida)
+```
+
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Felimida)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Felimida)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Felimida))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Felimida)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Felimida)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Felimida)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 6, name = "Oranges")[2:6],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4,5,6)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_Felimida.svg", height = 8, width =10)
+```
+
+
+```{r}
+# Polycera
+PREV=0.5 #  samples
+ABUND=0.0001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop, sample_data(pseq_nudis2_skin_prop)[,"HostGenus"]=="Polycera" )
+
+pseq_nudis2_skin_core_Polycera <- core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Polycera
+tax_table(pseq_nudis2_skin_core_Polycera)
+```
+
+```{r}
+# Trapania
+PREV=0.5 # 3 samples
+ABUND=0.0001
+# Skin core for every family
+pseq_nudis2_skin_genus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostGenus"]=="Trapania" )
+
+pseq_nudis2_skin_core_Trapania <- core(pseq_nudis2_skin_genus, detection = ABUND, prevalence = PREV,include.lowest = T)
+pseq_nudis2_skin_core_Trapania
+tax_table(pseq_nudis2_skin_core_Trapania)
+```
+
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Trapania)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Trapania)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Trapania))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Trapania)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Trapania)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Trapania)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 6, name = "Oranges")[2:6],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4,5,6)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_Trapania.svg", height = 8, width =10)
+```
+
+Let's check if there is some core in different species. 
+```{r}
+# Skin core for every specie
+#species <- c("Doris pseudoargus", "Felimida (Chromodoris) purpurea", "Trapania maculata")
+
+PREV=0.75
+ABUND=0.001
+
+pseq_nudis2_skin_Doris_pseudoargus <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostSpecies"] == "Doris pseudoargus")
+
+pseq_nudis2_skin_core_Doris_pseudoargus <- core(pseq_nudis2_skin_Doris_pseudoargus, detection = ABUND, prevalence = PREV,include.lowest = T)
+tax_table(pseq_nudis2_skin_core_Doris_pseudoargus)
+```
+
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Doris_pseudoargus)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Doris_pseudoargus)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Doris_pseudoargus))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Doris_pseudoargus)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Doris_pseudoargus)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Doris_pseudoargus)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 4, name = "Blues")[2:4],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_Doris_pseudoargus.svg", height = 5, width =10)
+```
+
+
+```{r}
+# Skin core for every specie
+#species <- c("Doris pseudoargus", "Felimida (Chromodoris) purpurea", "Trapania maculata")
+
+PREV=0.75
+ABUND=0.001
+
+pseq_nudis2_skin_Felimida_purpurea <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostSpecies"] == "Felimida (Chromodoris) purpurea")
+
+pseq_nudis2_skin_core_Felimida_purpurea <- microbiome::core(pseq_nudis2_skin_Felimida_purpurea, detection = ABUND, prevalence = PREV,include.lowest = T)
+tax_table(pseq_nudis2_skin_core_Felimida_purpurea)
+```
+
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Felimida_purpurea)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Felimida_purpurea)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Felimida_purpurea))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Felimida_purpurea)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Felimida_purpurea)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Felimida_purpurea)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 4, name = "Blues")[2:4],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_pseq_Felimida_purpurea.svg", height = 4, width =8)
+```
+
+```{r}
+# Skin core for every specie
+#species <- c("Doris pseudoargus", "Felimida (Chromodoris) purpurea", "Trapania maculata")
+
+PREV=0.75
+ABUND=0.001
+
+pseq_nudis2_skin_Trapania_maculata <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostSpecies"] == "Trapania maculata")
+
+pseq_nudis2_skin_core_Trapania_maculata <- core(pseq_nudis2_skin_Trapania_maculata, detection = ABUND, prevalence = PREV,include.lowest = T)
+tax_table(pseq_nudis2_skin_core_Trapania_maculata)
+```
+
+```{r}
+#Let's build the prevalence table by number of individual
+##First get the props abundance table for core ASVs convert to %
+skin_core_perc=otu_table(pseq_nudis2_skin_core_Trapania_maculata)*100
+##Set parameters
+abund_thrs=c(0.01, 0.1, 0.5, 1,5,10)
+input_data2=data.frame(matrix(ncol = 0,nrow = length(row.names(skin_core_perc))))
+#Get appereances for each abund thrs
+for (elem in abund_thrs) {
+  temp_col=rowSums(skin_core_perc>=elem)
+  input_data2=cbind(input_data2,temp_col)
+}
+#Change colnames
+colnames(input_data2)=abund_thrs
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data2=input_data2[names(taxa_avg_abund(pseq_nudis2_skin_core_Trapania_maculata)),]
+
+#Change row names
+new_rownames=c()
+for (i in names(taxa_avg_abund(pseq_nudis2_skin_core_Trapania_maculata))) {
+  temp_row=paste(tax_table(pseq_nudis2_skin_core_Trapania_maculata)[i,"ASV"],
+                 tax_table(pseq_nudis2_skin_core_Trapania_maculata)[i,"family"],
+                 tax_table(pseq_nudis2_skin_core_Trapania_maculata)[i,"genus"],sep=" | ")
+  new_rownames=c(new_rownames,temp_row)
+  }
+rownames(input_data2)=new_rownames
+
+
+##Set legend colors manually
+colors_data2=c("#5E4FA2","#4898b7","#90d1a5","#def29a","#fed985","#fa9354","#de4c4c","#9e0142")
+colors_data2=c("white",RColorBrewer::brewer.pal(n = 4, name = "Blues")[2:4],"#1F1F21")
+#colors_data2=c(RColorBrewer::brewer.pal(n = 8, name = "BrBG"))
+
+##Get initial heatmap
+htA2<-ComplexHeatmap::Heatmap(input_data2, heatmap_legend_param=list(title="Prevalence\nby Individuals",at=c(0,1,2,3,4)),
+                              show_column_names = TRUE, row_order = rownames(input_data2), column_order = colnames(input_data2),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance %)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 0.1),
+                              col = colors_data2,rect_gp = grid::gpar(col = "black", lwd = 1))
+
+##ajust legend and convert to ggplot
+gb_htA2=grid::grid.grabExpr(draw(htA2, merge_legend = TRUE,heatmap_legend_side = "right", annotation_legend_side = "right"))
+gb_htA2=ggpubr::as_ggplot(gb_htA2)
+gb_htA2
+
+ggsave(plot = gb_htA2, filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/core_pseq_pseq_Trapania_maculata.svg", height = 4, width =10)
+```
+
+
+pseq_nudis2_skin_core_Trapania_maculata
+
+```{r}
+# Summary unknown ASVs
+level <- "genus"
+
+pseq_dorid_samples <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostDorid.Aeolid"] == "dorid")
+
+pseq_aeolid_samples <- subset_samples(pseq_nudis2_skin_prop_f, sample_data(pseq_nudis2_skin_prop_f)[,"HostDorid.Aeolid"] == "aeolid")
+
+unknown_asvs_dorid <- sum(otu_table(pseq_dorid_samples)[!is.na(tax_table(pseq_dorid_samples)[,level]),]!=0)/sum(otu_table(pseq_dorid_samples)!=0)*100
+
+unknown_asvs_aeolid <- sum(otu_table(pseq_aeolid_samples)[!is.na(tax_table(pseq_aeolid_samples)[,level]),]!=0)/sum(otu_table(pseq_aeolid_samples)!=0)*100
+
+unknown_reads_dorid <- (sum(otu_table(pseq_dorid_samples)[row.names(otu_table(pseq_dorid_samples)) %in% row.names(tax_table(pseq_dorid_samples))[!is.na(tax_table(pseq_dorid_samples)[,level])],])/sum(otu_table(pseq_dorid_samples)))*100
+
+unknown_reads_aeolid <- (sum(otu_table(pseq_aeolid_samples)[row.names(otu_table(pseq_aeolid_samples)) %in% row.names(tax_table(pseq_aeolid_samples))[!is.na(tax_table(pseq_aeolid_samples)[,level])],])/sum(otu_table(pseq_aeolid_samples)))*100
+
+unknown_asvs_dorid
+unknown_asvs_aeolid
+unknown_reads_dorid
+unknown_reads_aeolid
+```
+
+# Top taxa
+Now, we create a heatmap with the unnclassified top taxa. 
+```{r}
+# Phyloseq with the 22 ASVs
+
+# Filtering taxa which is not present in any sample (Not in proportions!!!)
+pseq_nudis2_skin_f <- prune_taxa(taxa_sums(pseq_nudis2_skin) > 0, pseq_nudis2_skin)
+pseq_nudis2_skin_prop_f <- prune_taxa(taxa_sums(pseq_nudis2_skin_prop) > 0, pseq_nudis2_skin_prop)
+
+# ASVs not classified at Order level
+na_asv=subset(row.names(tax_table(pseq_nudis2_skin_prop_f)),is.na(tax_table(pseq_nudis2_skin_prop_f)[,"order"]))
+pseq_prop_na=subset_taxa(pseq_nudis2_skin_prop_f, ASV %in% na_asv)
+
+# Phyloseq with most abundant unclassified ASVs
+filter_func=genefilter::filterfun(genefilter::kOverA(1,0.33))
+pseq_prop_na_fs=filter_taxa(pseq_prop_na,filter_func,TRUE)
+pseq_prop_na_fs_taxa=row.names(tax_table(pseq_prop_na_fs)) 
+pseq_prop_na_most_abundant_skin = phyloseq::prune_taxa(pseq_prop_na_fs_taxa, pseq_nudis2_skin_prop_f)
+```
+
+
+```{r}
+prevalences <- seq(.05, 1, .05)
+detections <- c(0.0015, 0.001, 0.015, 0.01, 0.1)/100
+color=rev(RColorBrewer::brewer.pal(9, "Spectral"))
+
+p_core <- plot_core(pseq_prop_na_most_abundant_skin, plot.type = "heatmap", colours = color,
+    prevalences = prevalences, detections = detections)
+#Get input format
+input_data=reshape2::acast(p_core$data,Taxa~DetectionThreshold,value.var = "Prevalence")
+#Order by abundance
+taxa_avg_abund <- function(x) {sort(rowSums(microbiome::abundances(x)), decreasing=TRUE)/nsamples(x)}
+input_data=input_data[names(taxa_avg_abund(pseq_prop_na_most_abundant_skin)),]
+
+##Get initial heatmap
+color_cor=rev(RColorBrewer::brewer.pal(n = 10, name = "Spectral"))
+color_cor=RColorBrewer::brewer.pal(n = 10, name = "Greens")
+htA1<-ComplexHeatmap::Heatmap(input_data, heatmap_legend_param=list(title="Prevalence",at=c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1)),
+                              show_column_names = TRUE, row_order = rownames(input_data), column_order = colnames(input_data),
+                              column_names_rot = 45,column_title_side = "bottom", column_title = "Detection Threshold (Relative Abundance)",
+                              row_names_max_width = unit(10, "cm"),border_gp = grid::gpar(col = "black", lty = 1),
+                              col = color_cor,rect_gp = grid::gpar(col = "black", lwd = 2))
+
+
+htA1
+```
+
+```{r}
+# Heatmap top taxa
+# Filter 
+## Get list with ASVs with relative abundance > 0.01 in at least 2 of the samples
+
+# Filtering taxa which is not present in any sample (Not in proportions!!!)
+pseq_nudis2_skin_f <- prune_taxa(taxa_sums(pseq_nudis2_skin) > 0, pseq_nudis2_skin)
+pseq_nudis2_skin_prop_f <- prune_taxa(taxa_sums(pseq_nudis2_skin_prop) > 0, pseq_nudis2_skin_prop)
+
+# Phyloseq with most abundant ASVs
+#Filter 
+##Get list with ASVs with relative abundance > 0.01 in at least 2 of the samples
+filter_func=genefilter::filterfun(genefilter::kOverA(2,0.02))
+pseq_nudis2_skin_prop_f_toptax=filter_taxa(pseq_nudis2_skin_prop_f, filter_func,TRUE)
+pseq_nudis2_skin_prop_f_toptax
+
+#See how much relative abundance per sample
+colSums(otu_table(pseq_nudis2_skin_prop_f_toptax))
+```
+
+```{r}
+#Get inputs
+##Get Proportions for top 1% ASVs and convert to percentages
+top_ASV_perc=data.frame(otu_table(pseq_nudis2_skin_prop_f_toptax))*100
+##Change taxa names to full taxonomy
+top_ASV_tax=data.frame(tax_table(pseq_nudis2_skin_prop_f_toptax))
+row.names(top_ASV_perc)=paste(top_ASV_tax$ASV,top_ASV_tax$class,top_ASV_tax$order,top_ASV_tax$family,top_ASV_tax$genus,sep =" | ")
+##Change samples names
+samples_data=data.frame(sample_data(pseq_nudis2_skin_prop_f_toptax))
+colnames(top_ASV_perc)=samples_data$SampleName
+
+##Get phylum labels info(taxa) and set colors
+phy_info=top_ASV_tax$phylum
+leyend_uniq_tax_phy=na.exclude(unique(top_ASV_tax$phylum))
+phy_colors=colorRampPalette(brewer.pal(12, name="Paired"))(length(leyend_uniq_tax_phy))
+names(phy_colors)=leyend_uniq_tax_phy
+
+##Get SampleType labels (samples) and set colors
+sample_info=samples_data$HostFamily
+```
+
+
+```{r, fig.height=9, fig.width=6}
+library(ComplexHeatmap)
+#Get Top annotations 
+top_info <- HeatmapAnnotation(gp = gpar(col = "black"),show_annotation_name = T,show_legend=F,
+                              Groups=sample_info,col = list(Groups=color_host_family))
+#Get Lateral annotations 
+lateral_info <-rowAnnotation(Phylum=phy_info, show_annotation_name = T,show_legend=F,
+                          col=list(Phylum=phy_colors),gp = gpar(col = "black"))
+#Color Function for Heatmap
+#col3=circlize::colorRamp2(c(0,0.01,0.05,0.1,0.2,0.4,0.6,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 9, name = "RdYlBu"))))
+#col3=circlize::colorRamp2(c(0,0.001,0.005,0.01,0.05,0.1,0.2,0.4,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 10, name = "RdYlBu"))))
+col3=circlize::colorRamp2(c(0,0.01,0.1,0.5,1,5,10,20,40,80,100), c(rev(RColorBrewer::brewer.pal(n = 11, name = "RdYlBu"))))
+
+#Heatmap
+ht_top<-Heatmap(top_ASV_perc,show_column_names = T,
+              col = col3,
+              border_gp = grid::gpar(col = "black", lty = 1),
+              rect_gp = grid::gpar(col = "black", lwd = 2),
+              clustering_distance_rows = "euclidean",clustering_method_rows = "ward.D2",
+              clustering_distance_columns = "euclidean",clustering_method_columns = "ward.D2",
+              show_heatmap_legend = F,row_names_max_width = unit(15, "cm"),
+              top_annotation = top_info,
+              column_names_gp = grid::gpar(fontsize = 9),
+              row_dend_width = unit(10,"mm"),
+              row_names_gp = grid::gpar(fontsize = 10),
+              right_annotation = lateral_info)
+
+#Convert to ggplot
+gb_ht_top=grid.grabExpr(draw(ht_top))
+gb_ht_top=ggpubr::as_ggplot(gb_ht_top) #+ coord_flip(clip = "off")
+
+#Create legend in the desired order
+#Create and combine legends
+lgd1=Legend(col_fun = col3,title="Relative Abundances (%)",at=c(0,10,20,40,60,80,100),legend_width = unit(8, "cm"),direction = "horizontal")
+lgd2=Legend(labels = names(color_host_family),legend_gp = gpar(fill=color_host_family),title = "Groups",ncol = 2)
+lgda=Legend(labels = names(phy_colors),legend_gp = gpar(fill=phy_colors),title = "Tax Level: Phylum",ncol = 2)
+
+pd = packLegend(lgd1, lgd2, lgda,direction = "horizontal")
+#Convert to ggplot
+gb_L= grid.grabExpr(draw(pd))
+gg_L=ggpubr::as_ggplot(gb_L)
+top_heatmap<-cowplot::plot_grid(gg_L,gb_ht_top, nrow = 2,rel_heights = c(0.5,5))
+top_heatmap
+ggsave(plot=top_heatmap,filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/Ttop_tax.pdf",height = 10, width = 6,scale = 1)
+```
+
+
+## Set groups colors
+```{r}
+color_host_family=c(Aplysiidae="#d40055ff",Aeolidiidae="#ffaaaaff",Arminidae="#00ffccff",Babakinidae="#2ca02cff",Discodorididae="#0055d4ff",Dorididae="#d35fbcff",Dendrodorididae="#800080ff",Chromodorididae="#80b3ff",Polyceridae="#000000ff",Platydorididae="#D9E1E6",Facelinidae="#5b859e",Anadoridoidea="#F28E2BFF",Triophidae="#59A14FFF", Goniodorididae="#F1CE63FF")
+
+color_phylum=c("#D9E1E6","#5b859e", "#F28E2BFF", "#59A14FFF", "black", "#F1CE63FF", "#499894FF", "#a2ceaa", "#D37295FF", "#336547", "#A9B5AEFF","#EEE789","#B15232","lightblue", "#5C5AD7", "#535D64", "#A6E046", "brown", "#AF86D7", "#FFC14F", "#1B9E77", "#C42A7B","#5AA2FF", "#FA6666", "#535D64","red")
+
+#Subset palettes
+color_sampletype_subset1=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",`reproductive organs`="#2ca02cff",
+                   negative="#000000ff")
+color_sampletype_subset2=c(mantle="#d40055ff",gills="#ffaaaaff",`digestive system`="#00ffccff",
+                           slime="#d35fbcff",`slime incubation`="#800080ff")
+```
+
+
+```{r}
+library(ComplexHeatmap)
+#Get Top annotations 
+top_info <- HeatmapAnnotation(gp = gpar(col = "black"),show_annotation_name = T,show_legend=F,
+                              Groups=sample_info,col = list(Groups=color_host_family))
+#Get Lateral annotations 
+#lateral_info <-rowAnnotation(Phylum=phy_info, show_annotation_name = T,show_legend=F,
+                          #col=list(Phylum=color_phylum),gp = gpar(col = "black"))
+#Color Function for Heatmap
+#col3=circlize::colorRamp2(c(0,0.01,0.05,0.1,0.2,0.4,0.6,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 9, name = "RdYlBu"))))
+#col3=circlize::colorRamp2(c(0,0.001,0.005,0.01,0.05,0.1,0.2,0.4,0.8,1), c(rev(RColorBrewer::brewer.pal(n = 10, name = "RdYlBu"))))
+col3=circlize::colorRamp2(c(0,0.01,0.1,0.5,1,5,10,20,40,80,100), c(rev(RColorBrewer::brewer.pal(n = 11, name = "RdYlBu"))))
+
+#Heatmap
+ht_top<-Heatmap(as.matrix(top_ASV_perc),show_column_names = T,
+              col = col3,
+              border_gp = grid::gpar(col = "black", lty = 0.5),
+              rect_gp = grid::gpar(col = "black", lwd = 1),
+              clustering_distance_rows = "euclidean",clustering_method_rows = "ward.D2",
+              clustering_distance_columns = "euclidean",clustering_method_columns = "ward.D2",
+              show_heatmap_legend = F,row_names_max_width = unit(10, "cm"),
+              top_annotation = top_info, row_names_gp = grid::gpar(fontsize = 9), column_names_gp = grid::gpar(fontsize = 5))
+              #right_annotation = lateral_info)
+
+#Convert to ggplot
+gb_ht_top=grid.grabExpr(draw(ht_top))
+gb_ht_top=ggpubr::as_ggplot(gb_ht_top)
+
+#Create legend in the desired order
+#Create and combine legends
+lgd1=Legend(col_fun = col3,title="Relative Abundances (%)",at=c(0,5,10,15,20,25,30,35),legend_width = unit(3, "cm"),direction = "horizontal", grid_width = unit(3, "cm"))
+lgd2=Legend(labels = names(color_host_family),legend_gp = gpar(fill=color_sampletype),title = "Groups",ncol = 2, )
+#lgda=Legend(labels = names(phy_colors),legend_gp = gpar(fill=phy_colors),title = "Tax Level: Phylum",ncol = 2)
+pd = packLegend(lgd1, lgd2,direction = "horizontal")
+#Convert to ggplot
+gb_L= grid.grabExpr(draw(pd))
+gg_L=ggpubr::as_ggplot(gb_L)
+top_heatmap<-cowplot::plot_grid(gg_L,gb_ht_top, nrow = 2, rel_heights = c(0.5,50))
+top_heatmap
+ggsave(plot=top_heatmap,filename = "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/empezamos_de_nuevo/top_taxa.pdf",height = 15, width = 15,scale = 1)
+
+```
+
+# ASVs unknown top taxa
+```{r}
+#Guardamos las 23 ASVs en un fasta. Realmente hemos guardado las 23 ASVs correspondientes a muestras de Skin y Slime. En skin solo hay 22 de esta. 
+ASV_file <- "/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/tareas/R_Objects_merged/ASVs_sequences_merged.fa"
+ASVs <- readDNAStringSet(ASV_file, format="fasta",
+               nrec=-1L, skip=0L, seek.first.rec=FALSE,
+               use.names=TRUE, with.qualities=FALSE)
+
+ASVs_most_abundant <- ASVs[names(ASVs) %in% pseq_prop_na_fs_taxa]
+writeXStringSet(ASVs_most_abundant,"/Users/dafneporcelsanchis/Desktop/CURS_22_23/TFM/tareas/R_Objects_merged/ASV_nudis2_most_abundant_33_1.fasta")
+```
+
+
+
